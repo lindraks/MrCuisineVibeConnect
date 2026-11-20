@@ -9,18 +9,25 @@ import app.toque.core.json.list
 import app.toque.core.json.obj
 import app.toque.core.json.str
 import app.toque.core.machine.Accessory
+import app.toque.core.machine.Limits
 
 /**
  * Recettes publiées sur monsieur-cuisine.com, lues directement par l'API publique du site
  * (sans compte, sans l'appli d'origine) puis converties au modèle de Toque.
  *
- * Seules les recettes officielles du Monsieur Cuisine connect sont demandées. Chaque étape
- * porte son réglage machine (mode « customized », balance, turbo, vapeur, rissoler, pétrir).
+ * Sont demandées les recettes du Monsieur Cuisine connect (officielles et de la communauté) et
+ * celles du Monsieur Cuisine smart dont toutes les étapes passent sur le Connect (voir
+ * [connectCompatible]). Chaque étape porte son réglage machine (mode « customized », balance,
+ * turbo, vapeur, rissoler, pétrir).
  */
 object McOnline {
     const val API = "https://mc-api.tecpal.com"
     /** Monsieur Cuisine connect. */
     const val DEVICE = "MC2.0"
+    /** Monsieur Cuisine smart : ses recettes ne sont gardées que si elles passent sur le Connect. */
+    const val DEVICE_SMART = "MC3.0"
+    /** Modèles dont la liste des recettes est parcourue, dans cet ordre. */
+    val DEVICES = listOf(DEVICE, DEVICE_SMART)
     const val PAGE_SIZE = 100
     /** Version de la lecture des fiches : à augmenter quand elle change, pour que la synchro les relise toutes. */
     const val PARSER = 2
@@ -31,8 +38,9 @@ object McOnline {
     fun headers(language: String): Map<String, String> =
         linkedMapOf("Accept" to "application/json", "Accept-Language" to language, "device-type" to "web")
 
-    fun listUrl(page: Int): String =
-        "$API/api/v2/recipes/page/$page/size/$PAGE_SIZE?filters%5BdeviceTypes%5D%5B%5D=$DEVICE&filters%5Bsource%5D%5B%5D=official"
+    /** Une page de la liste d'un modèle : recettes officielles et de la communauté. */
+    fun listUrl(page: Int, device: String = DEVICE): String =
+        "$API/api/v2/recipes/page/$page/size/$PAGE_SIZE?filters%5BdeviceTypes%5D%5B%5D=$device"
 
     fun recipeUrl(apiId: Long): String = "$API/api/v2/recipes/$apiId"
 
@@ -103,6 +111,10 @@ object McOnline {
         val sizes = r["servingSizes"].list().map { it.obj() }
         val defaultSize = r.int("defaultServingSizeId")
         val size = sizes.firstOrNull { it.int("id") == defaultSize } ?: sizes.firstOrNull() ?: emptyMap()
+
+        // Recette d'un autre modèle (Smart) : gardée seulement si chaque étape passe sur le Connect.
+        val devices = r["deviceTypes"].list().mapNotNull { (it as? String)?.trim() }
+        if (DEVICE !in devices && !connectCompatible(size["steps"].list().map { it.obj() })) return null
 
         val categories = r["categories"].list().mapNotNull { it.obj().str("name")?.trim()?.takeIf { n -> n.isNotEmpty() } }
         val tags = r["tags"].list().mapNotNull { t ->
@@ -228,6 +240,11 @@ object McOnline {
                 continue
             }
             val mode = ds.str("mode")?.trim()?.lowercase().orEmpty()
+            if (mode == "precleaning") {
+                // Pré-nettoyage du Smart : pas une étape de cuisson, on garde seulement son texte.
+                if (description.isNotEmpty()) out += Step(description)
+                continue
+            }
             val settings = ds["settings"].list().map { it.obj() }.sortedBy { it.int("order") ?: 0 }.ifEmpty { listOf(emptyMap()) }
             for ((k, st) in settings.withIndex()) {
                 val label = if (k == 0) text else ""
@@ -255,6 +272,42 @@ object McOnline {
             }
         }
         return out
+    }
+
+    /**
+     * Vrai si toutes les étapes d'une recette (d'un autre modèle) passent sur le Connect sans
+     * être bloquées par [app.toque.core.machine.SafetyPolicy] : programmes connus du Connect,
+     * températures de la table d'origine, vitesses entières, durées et vitesses dans les limites.
+     */
+    fun connectCompatible(raw: List<Map<String, Any?>>): Boolean {
+        for (s in raw) {
+            val ds = s["deviceSetting"]?.obj()?.takeIf { it.isNotEmpty() } ?: continue
+            val mode = ds.str("mode")?.trim()?.lowercase().orEmpty()
+            if (mode.isEmpty() || mode == "scale" || mode == "precleaning") continue
+            val reverse = ds.bool("reverse") ?: false
+            val settings = ds["settings"].list().map { it.obj() }.ifEmpty { listOf(emptyMap()) }
+            for (st in settings) {
+                val ms = (st.int("time") ?: 0).coerceAtLeast(0) * 1000L
+                when {
+                    mode == "customized" -> {
+                        val speedF = (st["speedFloat"] as? Number)?.toDouble() ?: st.int("speed")?.toDouble() ?: 0.0
+                        if (speedF % 1.0 != 0.0) return false
+                        val speed = speedF.toInt()
+                        val temp = (st.int("temperature") ?: 0).coerceAtLeast(0)
+                        if (temp != 0 && app.toque.core.protocol.Mcc.levelForCelsius(temp) < 0) return false
+                        if (temp > 0 && speed > Limits.MAX_SPEED_HEATED) return false
+                        if (reverse && speed > Limits.MAX_SPEED_REVERSE) return false
+                        if (ms > Limits.MAX_MS_DEFAULT) return false
+                        if (speed > 6 && ms > Limits.MAX_MS_HIGH_SPEED) return false
+                    }
+                    mode == "turbo" || mode == "steaming" -> if (ms > Limits.MAX_MS_DEFAULT) return false
+                    mode == "roasting" -> if (ms > Limits.MAX_MS_TOAST) return false
+                    mode.startsWith("kneading") -> if (ms > Limits.MAX_MS_KNEAD) return false
+                    else -> return false
+                }
+            }
+        }
+        return true
     }
 
     private fun machine(mode: String, st: Map<String, Any?>, reverse: Boolean, text: String): StepMachine? {

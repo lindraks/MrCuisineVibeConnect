@@ -26,7 +26,7 @@ if [ -d $T/apkx ]; then
   # fails on Magisk's page-aligned APK ("invalid zip magic").
   cp -r $T/apkx/. apk/ || die "cannot copy $T/apkx"
 else
-  unzip -o -q $T/magisk.apk -d apk || die "cannot unzip magisk.apk (extract assets/ and lib/armeabi-v7a/ on the PC and push them to $T/apkx)"
+  unzip -o -q $T/magisk.apk -d apk || echo "note: unzip stopped at the APK signing block (old TWRP busybox), checking the extracted files"
 fi
 for f in boot_patch.sh util_functions.sh stub.apk; do
   cp apk/assets/$f . || die "$f missing: is this a Magisk APK?"

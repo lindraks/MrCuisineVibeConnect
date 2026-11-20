@@ -85,11 +85,9 @@ function Get-Adb {
 
 function Adb {
     $adb = Get-Adb
-    # Windows PowerShell 5.1: with ErrorActionPreference=Stop, a native command's stderr redirected
-    # with 2>&1 becomes a terminating error, and adb prints its push/pull progress on stderr. Keep
-    # going and turn the error records back into plain text lines.
-    $ErrorActionPreference = "Continue"
-    $out = & $adb @args 2>&1 | ForEach-Object { "$_" } | Out-String
+    $prevEap = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    try { $out = & $adb @args 2>&1 | ForEach-Object { "$_" } | Out-String }
+    finally { $ErrorActionPreference = $prevEap }
     return $out.Trim()
 }
 
