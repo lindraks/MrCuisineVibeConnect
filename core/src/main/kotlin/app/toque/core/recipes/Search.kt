@@ -174,7 +174,8 @@ class SearchIndex(recipes: List<Recipe>) {
         return true
     }
 
-    fun search(query: String, filter: RecipeFilter = RecipeFilter(), limit: Int = 500): List<Hit> {
+    /** Sans limite par défaut : la liste des recettes n'affiche que les vignettes visibles. */
+    fun search(query: String, filter: RecipeFilter = RecipeFilter(), limit: Int = Int.MAX_VALUE): List<Hit> {
         val tokens = TextNorm.tokens(query).distinct()
         if (tokens.isEmpty()) {
             return entries.filter { accepts(it, filter) }
