@@ -76,6 +76,13 @@ class Prefs(context: Context) {
             p.edit().putBoolean("invertBowl", v).commit()
         }
 
+    /** Faire confirmer chaque réglage machine importé d'une recette avant de pouvoir le lancer. */
+    var reviewImported: Boolean
+        get() = p.getBoolean("reviewImported", true)
+        set(v) {
+            p.edit().putBoolean("reviewImported", v).commit()
+        }
+
     /** Montée progressive de la vitesse quand le contenu est chaud (≥ 60 °C). */
     var hotRamp: Boolean
         get() = p.getBoolean("hotRamp", true)

@@ -249,7 +249,7 @@ class CookScreen(a: MainActivity, private val recipe: Recipe, startStep: Int) : 
         if (violations.isNotEmpty()) {
             panelInfo = tr("Réglage refusé par la sécurité : %s. Utilisez la cuisson manuelle.", violations.first().message)
         }
-        if (step.needsReview && index !in reviewed && violations.isEmpty()) {
+        if (step.needsReview && a.prefs.reviewImported && index !in reviewed && violations.isEmpty()) {
             val rb = Ui.button(c, tr("J'ai vérifié ce réglage"), Ui.Style.GHOST, Icon.Kind.CHECK, height = 56, textSize = 17f) {
                 reviewed += index
                 a.prefs.reviewedSteps = a.prefs.reviewedSteps + reviewKey(index)
@@ -277,7 +277,7 @@ class CookScreen(a: MainActivity, private val recipe: Recipe, startStep: Int) : 
                 a.push(ManualScreen(a, m))
             }, Ui.lp(t = 6))
         }
-        val blocked = violations.isNotEmpty() || (step.needsReview && index !in reviewed)
+        val blocked = violations.isNotEmpty() || (step.needsReview && a.prefs.reviewImported && index !in reviewed)
         Ui.setButtonEnabled(startBtn, !blocked)
     }
 
