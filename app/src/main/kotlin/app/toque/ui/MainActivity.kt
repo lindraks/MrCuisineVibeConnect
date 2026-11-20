@@ -275,10 +275,17 @@ class MainActivity : Activity() {
                 if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER
             }
             val s = current
-            if (s != null && currentFocus !is android.widget.EditText) {
+            if (s != null) {
+                // Tourner le bouton sert toujours à l'écran, même après une recherche : le champ de
+                // saisie lâche le focus et le clavier se ferme. L'appui reste au champ s'il a le focus.
+                val inText = currentFocus is android.widget.EditText
+                if (inText && (left || right)) {
+                    currentFocus?.clearFocus()
+                    hideKeyboard()
+                }
                 if (left && s.onKnob(-1)) return true
                 if (right && s.onKnob(1)) return true
-                if (press && s.onKnobPress()) return true
+                if (!inText && press && s.onKnobPress()) return true
             }
         }
         return super.dispatchKeyEvent(event)
