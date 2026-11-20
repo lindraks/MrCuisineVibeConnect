@@ -98,7 +98,7 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
             15f, Ui.TEXT3).apply { setLineSpacing(0f, 1.1f) }, Ui.lp(t = 6))
         safety.addView(toggle(tr("Sons"), a.prefs.sound) { a.prefs.sound = it }, Ui.lp(t = 10))
         safety.addView(toggle(tr("Veille de l'écran après 5 min sans utilisation"), a.prefs.screenSleep) { a.prefs.screenSleep = it }, Ui.lp(t = 10))
-        safety.addView(Ui.text(c, tr("L'écran passe au noir, jamais pendant une cuisson ni quand le bol est chaud. Touchez-le pour le rallumer."),
+        safety.addView(Ui.text(c, tr("L'écran passe au noir et la LED du bouton s'éteint, jamais pendant une cuisson ni quand le bol est chaud. Touchez l'écran ou le bouton pour rallumer."),
             15f, Ui.TEXT3).apply { setLineSpacing(0f, 1.1f) }, Ui.lp(t = 6))
 
         // ---- Langue (titre bilingue : trouvable quelle que soit la langue affichée)

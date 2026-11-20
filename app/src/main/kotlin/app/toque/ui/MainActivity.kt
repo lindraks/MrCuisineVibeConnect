@@ -25,6 +25,7 @@ import app.toque.core.machine.EventType
 import app.toque.core.machine.JobSpec
 import app.toque.core.machine.MachineEvent
 import app.toque.core.machine.PauseReason
+import app.toque.core.machine.RootShell
 import app.toque.core.machine.SafetyPolicy
 import app.toque.core.machine.Snapshot
 import app.toque.core.machine.Verdict
@@ -55,6 +56,9 @@ class MainActivity : Activity() {
     private lateinit var sleepView: View
     private var lastInputMs = 0L
     private var asleep = false
+    /** LED du bouton (rouge, vert, bleu) mémorisée à l'entrée en veille, rétablie au réveil. */
+    @Volatile private var savedLed: List<Int>? = null
+    private val ledExec = java.util.concurrent.Executors.newSingleThreadExecutor()
     var knobListener: ((KeyEvent) -> Unit)? = null
 
     val prefs: Prefs get() = app.prefs
@@ -234,6 +238,14 @@ class MainActivity : Activity() {
         hideKeyboard()
         sleepView.visibility = View.VISIBLE
         window.attributes = window.attributes.apply { screenBrightness = 0.01f }
+        if (prefs.mode == Prefs.Mode.HARDWARE) ledExec.execute {
+            // Lit puis éteint la LED du bouton (fichiers du noyau, accessibles en root).
+            val r = RootShell.run(
+                "cd $LED_DIR && for c in $LED_COLORS; do printf '%s ' \$(cat \$c/brightness); done; " +
+                    "for c in $LED_COLORS; do echo 0 > \$c/brightness; done", 5_000)
+            val values = r.out.trim().split(' ').mapNotNull { it.toIntOrNull() }
+            if (r.ok && values.size == 3 && values.any { it > 0 }) savedLed = values
+        }
     }
 
     /** Rallume l'écran (toucher, bouton, événement machine). */
@@ -243,6 +255,12 @@ class MainActivity : Activity() {
         asleep = false
         sleepView.visibility = View.GONE
         window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
+        ledExec.execute {
+            val v = savedLed ?: return@execute
+            savedLed = null
+            RootShell.run(
+                "cd $LED_DIR && echo ${v[0]} > red/brightness && echo ${v[1]} > green/brightness && echo ${v[2]} > blue/brightness", 5_000)
+        }
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
@@ -514,6 +532,9 @@ class MainActivity : Activity() {
         /** Veille de l'écran : délai sans toucher, et fréquence du contrôle. */
         private const val SLEEP_AFTER_MS = 5 * 60_000L
         private const val IDLE_CHECK_MS = 15_000L
+        /** LED du bouton rotatif : trois canaux du noyau (0 à 255). */
+        private const val LED_DIR = "/sys/class/leds"
+        private const val LED_COLORS = "red green blue"
 
         /** MotionEvent.AXIS_SCROLL (API 26), valeur fixe pour Android 6. */
         private const val AXIS_SCROLL = 26
