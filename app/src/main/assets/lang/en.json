@@ -137,6 +137,8 @@
   "Erreur moteur": "Motor error",
   "Espace de stockage insuffisant sur le robot": "Not enough storage space on the robot",
   "Exiger la détection du bol": "Require bowl detection",
+  "Vérifier chaque réglage importé avant de le lancer": "Check each imported setting before starting it",
+  "Désactivé : les étapes des recettes se lancent sans « J'ai vérifié ce réglage ». Les limites de sécurité restent appliquées à chaque lancement.": "Off: recipe steps start without \"I've checked this setting\". The safety limits still apply to every start.",
   "Facile": "Easy",
   "Faites maintenant l'action « %s » sur le bouton du robot…": "Now do “%s” on the robot's knob…",
   "Favori": "Favourite",
