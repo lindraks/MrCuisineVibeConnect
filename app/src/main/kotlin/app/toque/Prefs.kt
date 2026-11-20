@@ -69,6 +69,13 @@ class Prefs(context: Context) {
             p.edit().putBoolean("requireBowl", v).commit()
         }
 
+    /** Écran au noir après 5 min sans utilisation (jamais pendant une cuisson ni bol chaud). */
+    var screenSleep: Boolean
+        get() = p.getBoolean("screenSleep", true)
+        set(v) {
+            p.edit().putBoolean("screenSleep", v).commit()
+        }
+
     /** Faire confirmer chaque réglage machine importé d'une recette avant de pouvoir le lancer. */
     var reviewImported: Boolean
         get() = p.getBoolean("reviewImported", true)

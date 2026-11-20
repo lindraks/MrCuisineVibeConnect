@@ -97,6 +97,9 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         safety.addView(Ui.text(c, tr("Désactivé : les étapes des recettes se lancent sans « J'ai vérifié ce réglage ». Les limites de sécurité restent appliquées à chaque lancement."),
             15f, Ui.TEXT3).apply { setLineSpacing(0f, 1.1f) }, Ui.lp(t = 6))
         safety.addView(toggle(tr("Sons"), a.prefs.sound) { a.prefs.sound = it }, Ui.lp(t = 10))
+        safety.addView(toggle(tr("Veille de l'écran après 5 min sans utilisation"), a.prefs.screenSleep) { a.prefs.screenSleep = it }, Ui.lp(t = 10))
+        safety.addView(Ui.text(c, tr("L'écran passe au noir, jamais pendant une cuisson ni quand le bol est chaud. Touchez-le pour le rallumer."),
+            15f, Ui.TEXT3).apply { setLineSpacing(0f, 1.1f) }, Ui.lp(t = 6))
 
         // ---- Langue (titre bilingue : trouvable quelle que soit la langue affichée)
         val language = section(right, "Langue · Language", Icon.Kind.INFO)

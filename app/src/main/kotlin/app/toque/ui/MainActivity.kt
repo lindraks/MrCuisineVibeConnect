@@ -7,6 +7,7 @@ import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -51,6 +52,9 @@ class MainActivity : Activity() {
     private var tone: ToneGenerator? = null
     private var toastView: TextView? = null
     private var lastKnobMs = 0L
+    private lateinit var sleepView: View
+    private var lastInputMs = 0L
+    private var asleep = false
     var knobListener: ((KeyEvent) -> Unit)? = null
 
     val prefs: Prefs get() = app.prefs
@@ -78,6 +82,12 @@ class MainActivity : Activity() {
         overlay = FrameLayout(this)
         overlay.visibility = View.GONE
         root.addView(overlay, Ui.flp())
+        // Veille douce : voile noir par-dessus tout, luminosité au minimum ; la tablette reste éveillée.
+        sleepView = View(this).apply {
+            setBackgroundColor(0xFF000000.toInt())
+            visibility = View.GONE
+        }
+        root.addView(sleepView, Ui.flp())
         setContentView(root)
 
         try {
@@ -111,6 +121,8 @@ class MainActivity : Activity() {
         }
         unsubscribeEvents = app.machine.onEvent { e -> onMachineEvent(e) }
         topBar.startClock()
+        lastInputMs = SystemClock.uptimeMillis()
+        main.postDelayed(idleCheck, IDLE_CHECK_MS)
     }
 
     override fun onResume() {
@@ -122,6 +134,8 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        main.removeCallbacks(idleCheck)
+        wake()
         unsubscribe?.invoke()
         unsubscribeEvents?.invoke()
         topBar.stopClock()
@@ -203,9 +217,52 @@ class MainActivity : Activity() {
         back()
     }
 
+    // ------------------------------------------------------------------ veille de l'écran
+
+    /** Toutes les 15 s : voile noir après [SLEEP_AFTER_MS] sans toucher, jamais pendant une cuisson ni bol chaud. */
+    private val idleCheck = object : Runnable {
+        override fun run() {
+            val s = snapshot
+            val idle = SystemClock.uptimeMillis() - lastInputMs > SLEEP_AFTER_MS
+            if (!asleep && prefs.screenSleep && idle && !s.busy && !s.jobActive && !s.hot) sleep()
+            main.postDelayed(this, IDLE_CHECK_MS)
+        }
+    }
+
+    private fun sleep() {
+        asleep = true
+        hideKeyboard()
+        sleepView.visibility = View.VISIBLE
+        window.attributes = window.attributes.apply { screenBrightness = 0.01f }
+    }
+
+    /** Rallume l'écran (toucher, bouton, événement machine). */
+    fun wake() {
+        lastInputMs = SystemClock.uptimeMillis()
+        if (!asleep) return
+        asleep = false
+        sleepView.visibility = View.GONE
+        window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (asleep) {
+            // Le geste qui rallume l'écran n'atteint pas l'interface.
+            if (ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL) wake()
+            return true
+        }
+        lastInputMs = SystemClock.uptimeMillis()
+        return super.dispatchTouchEvent(ev)
+    }
+
     // ------------------------------------------------------------------ bouton rotatif
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (asleep) {
+            if (event.action == KeyEvent.ACTION_UP) wake()
+            return true
+        }
+        lastInputMs = SystemClock.uptimeMillis()
         knobListener?.let { l ->
             if (event.action == KeyEvent.ACTION_DOWN) l(event)
             return true
@@ -228,6 +285,11 @@ class MainActivity : Activity() {
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (asleep) {
+            wake()
+            return true
+        }
+        lastInputMs = SystemClock.uptimeMillis()
         if (event.action == MotionEvent.ACTION_SCROLL) {
             // Encodeur rotatif (AXIS_SCROLL) ou molette (AXIS_VSCROLL)
             val v = event.getAxisValue(AXIS_SCROLL).let { if (it == 0f) -event.getAxisValue(MotionEvent.AXIS_VSCROLL) else it }
@@ -243,6 +305,7 @@ class MainActivity : Activity() {
     // ------------------------------------------------------------------ évènements machine
 
     private fun onMachineEvent(e: MachineEvent) {
+        wake()
         current?.onEvent(e)
         when (e.type) {
             EventType.JOB_FINISHED -> chime(2)
@@ -440,6 +503,10 @@ class MainActivity : Activity() {
 
     companion object {
         private var reopenSettings = false
+
+        /** Veille de l'écran : délai sans toucher, et fréquence du contrôle. */
+        private const val SLEEP_AFTER_MS = 5 * 60_000L
+        private const val IDLE_CHECK_MS = 15_000L
 
         /** MotionEvent.AXIS_SCROLL (API 26), valeur fixe pour Android 6. */
         private const val AXIS_SCROLL = 26
