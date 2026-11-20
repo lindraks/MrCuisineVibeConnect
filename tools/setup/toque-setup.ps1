@@ -85,7 +85,9 @@ function Get-Adb {
 
 function Adb {
     $adb = Get-Adb
-    $out = & $adb @args 2>&1 | Out-String
+    $prevEap = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    try { $out = & $adb @args 2>&1 | ForEach-Object { "$_" } | Out-String }
+    finally { $ErrorActionPreference = $prevEap }
     return $out.Trim()
 }
 

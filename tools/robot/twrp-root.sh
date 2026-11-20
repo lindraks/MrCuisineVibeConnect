@@ -21,7 +21,7 @@ die() { echo "ERROR: $*"; exit 1; }
 echo "== 1. Magisk: patching the original boot"
 rm -rf $T/magisk
 mkdir -p $T/magisk/apk && cd $T/magisk || die "cannot create $T/magisk"
-unzip -o -q $T/magisk.apk -d apk || die "cannot unzip magisk.apk"
+unzip -o -q $T/magisk.apk -d apk || echo "note: unzip stopped at the APK signing block (old TWRP busybox), checking the extracted files"
 for f in boot_patch.sh util_functions.sh stub.apk; do
   cp apk/assets/$f . || die "$f missing: is this a Magisk APK?"
 done

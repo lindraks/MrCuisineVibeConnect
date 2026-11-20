@@ -56,19 +56,22 @@ class OnlineSync(private val context: Context, private val prefs: Prefs, private
         // 1. Liste complète (résumés).
         progress(tr("Liste des recettes…"))
         val entries = ArrayList<McOnline.Entry>()
-        var page = 1
-        var pages = 1
-        while (page <= pages) {
-            val p = try {
-                McOnline.parsePage(get(McOnline.listUrl(page), language))
-            } catch (e: IOException) {
-                return LidlSync.Report(false, tr("Serveur de recettes injoignable : %s", e.message ?: e.toString()))
+        val seen = HashSet<Long>()
+        for (device in McOnline.DEVICES) {
+            var page = 1
+            var pages = 1
+            while (page <= pages) {
+                val p = try {
+                    McOnline.parsePage(get(McOnline.listUrl(page, device), language))
+                } catch (e: IOException) {
+                    return LidlSync.Report(false, tr("Serveur de recettes injoignable : %s", e.message ?: e.toString()))
+                }
+                pages = p.totalPages.coerceIn(1, 1000)
+                for (e in p.entries) if (seen.add(e.apiId)) entries += e
+                progress(tr("Liste des recettes… %d / %d", page, pages))
+                page++
+                pause(300)
             }
-            pages = p.totalPages.coerceIn(1, 1000)
-            entries += p.entries
-            progress(tr("Liste des recettes… %d / %d", page, pages))
-            page++
-            pause(300)
         }
         if (entries.isEmpty()) return LidlSync.Report(false, tr("Aucune recette reçue du serveur"))
 

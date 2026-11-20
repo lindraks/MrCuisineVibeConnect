@@ -4,6 +4,7 @@ import app.toque.core.recipes.McOnline
 import app.toque.core.recipes.RecipeCodec
 import app.toque.core.recipes.StepProgram
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -118,5 +119,35 @@ class McOnlineTest {
         assertEquals("en-US", McOnline.languageFor("en"))
         assertTrue(McOnline.listUrl(2).contains("/page/2/size/100?"))
         assertTrue(McOnline.listUrl(1).contains("MC2.0"))
+        assertTrue(McOnline.listUrl(1, McOnline.DEVICE_SMART).contains("MC3.0"))
+        assertFalse(McOnline.listUrl(1).contains("official"))
+        assertEquals(listOf("MC2.0", "MC3.0"), McOnline.DEVICES)
+    }
+
+    /** Recette d'essai à une étape machine. */
+    private fun oneStep(devices: String, mode: String, speed: Double = 2.0, temp: Int = 0, time: Int = 30, reverse: Boolean = false) =
+        "{\"data\":{\"recipe\":{\"id\":7,\"name\":\"Essai\",\"deviceTypes\":[$devices],\"defaultServingSizeId\":1," +
+            "\"servingSizes\":[{\"id\":1,\"steps\":[{\"order\":1,\"description\":\"Mixer\",\"deviceSetting\":{\"mode\":\"$mode\"," +
+            "\"reverse\":$reverse,\"settings\":[{\"order\":0,\"speed\":${speed.toInt()},\"speedFloat\":$speed,\"temperature\":$temp,\"time\":$time}]}}]}]}}}"
+
+    @Test fun smartRecipesOnlyIfConnectCompatible() {
+        val smart = "\"MC3.0\""
+        assertNotNull(McOnline.parseRecipe(oneStep(smart, "customized")))
+        assertNotNull(McOnline.parseRecipe(oneStep(smart, "kneading_soft_dough", time = 90)))
+        assertNull(McOnline.parseRecipe(oneStep(smart, "puree")))
+        assertNull(McOnline.parseRecipe(oneStep(smart, "sous_vide", temp = 60)))
+        assertNull(McOnline.parseRecipe(oneStep(smart, "customized", temp = 40)))           // absent de la table du Connect
+        assertNull(McOnline.parseRecipe(oneStep(smart, "customized", speed = 0.5)))         // vitesse non entière
+        assertNull(McOnline.parseRecipe(oneStep(smart, "customized", speed = 4.0, temp = 100)))  // trop vite en chauffe
+        assertNull(McOnline.parseRecipe(oneStep(smart, "customized", time = 100 * 60)))     // plus de 99 min
+        assertNull(McOnline.parseRecipe(oneStep(smart, "kneading_solid_dough", time = 300)))
+        // Recette du Connect : toujours gardée, l'étape inconnue reste à faire à la main.
+        val connect = McOnline.parseRecipe(oneStep("\"MC2.0\",$smart", "puree"))!!
+        assertTrue(connect.steps[0].text.contains("non pris en charge"))
+        // Pré-nettoyage du Smart : pas un obstacle, l'étape ne garde que son texte.
+        val pre = McOnline.parseRecipe(oneStep(smart, "precleaning"))!!
+        assertEquals(1, pre.steps.size)
+        assertNull(pre.steps[0].machine)
+        assertEquals("Mixer", pre.steps[0].text)
     }
 }
