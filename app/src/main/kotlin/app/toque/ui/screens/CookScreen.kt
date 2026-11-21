@@ -122,6 +122,7 @@ class CookScreen(a: MainActivity, private val recipe: Recipe, startStep: Int) : 
         if (index >= recipe.steps.size - 1) {
             countCooked()
             a.prefs.guidedRecipe = ""
+            a.prefs.guidedScale = ""
             a.chime(1)
             a.toast(tr("Bon appétit !"), Ui.OK)
             a.back()

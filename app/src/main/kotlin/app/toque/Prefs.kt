@@ -239,6 +239,13 @@ class Prefs(context: Context) {
             p.edit().putInt("guidedStep", v).commit()
         }
 
+    /** Prorata de la balance de la recette en cours (« id\nadaptations ») : pour cette fois, vide sinon. */
+    var guidedScale: String
+        get() = p.getString("guidedScale", "") ?: ""
+        set(v) {
+            p.edit().putString("guidedScale", v).commit()
+        }
+
     /** Réglages importés déjà vérifiés (« J'ai vérifié ce réglage »), clé = recette, étape et réglage. */
     var reviewedSteps: Set<String>
         get() = HashSet(p.getStringSet("reviewedSteps", emptySet()) ?: emptySet())

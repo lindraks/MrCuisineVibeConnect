@@ -14,7 +14,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import app.toque.core.i18n.I18n
 import app.toque.core.i18n.tr
+import app.toque.core.machine.Snapshot
 import app.toque.core.recipes.McOnline
+import app.toque.core.recipes.Proportions
 import app.toque.core.recipes.QuantityLinks
 import app.toque.core.recipes.Ingredient
 import app.toque.core.recipes.Recipe
@@ -40,8 +42,18 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
     private lateinit var favIcon: Icon
     private lateinit var favLabel: TextView
     private var adjustments = a.app.recipes.adjustmentsOf(recipe.id)
+    /**
+     * Prorata de la balance (un ingrédient pesé, les autres suivent) : adaptations pour cette fois,
+     * jamais enregistrées ; null sans prorata. [scaleNote] le résume.
+     */
+    private var scaled: RecipeAdjustments? = null
+    private var scaleNote = ""
     /** La recette telle qu'elle est affichée et cuisinée : celle de la source + les corrections. */
     private var shown = recipe.adjusted(adjustments)
+    /** Carte de pesée ouverte : ingrédient de référence et affichage du poids lu. */
+    private var weighRef = -1
+    private var weighValue: TextView? = null
+    private var weighInfo: TextView? = null
     private val ingredientsBox by lazy { Ui.vertical(c) }
     private val stepsList by lazy { Ui.vertical(c) }
 
@@ -81,7 +93,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
 
         val actions = Ui.horizontal(c)
         actions.addView(Ui.button(c, tr("Cuisiner"), Ui.Style.PRIMARY, Icon.Kind.PLAY, height = 66, textSize = 22f) {
-            a.push(CookScreen(a, shown, 0))
+            cook()
         }, LinearLayout.LayoutParams(0, Ui.WRAP, 1f).apply { rightMargin = Ui.u(12) })
         val fav = Ui.button(c, "", Ui.Style.SECONDARY, Icon.Kind.STAR, height = 66) { toggleFavorite() }
         favIcon = fav.getChildAt(0) as Icon
@@ -135,6 +147,22 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         if (shown.allIngredients.any { it.qty.isNotBlank() } || shown.steps.any { it.weigh != null }) {
             ing.addView(Ui.text(c, tr("Touchez une quantité pour l'adapter : les étapes suivent."), 14f, Ui.TEXT3), Ui.lp(t = 4))
         }
+        if (scaled != null) {
+            val box = Ui.vertical(c)
+            box.background = Ui.round(Ui.ACCENT_DIM, 16f)
+            box.setPadding(Ui.u(14), Ui.u(10), Ui.u(14), Ui.u(6))
+            box.addView(Ui.text(c, scaleNote, 16f, Ui.TEXT).apply { setLineSpacing(0f, 1.1f) })
+            box.addView(Ui.button(c, tr("Revenir aux quantités de la recette"), Ui.Style.GHOST, Icon.Kind.CLOSE, height = 46, textSize = 15f) {
+                scaled = null
+                shown = recipe.adjusted(adjustments)
+                renderIngredients()
+                renderSteps()
+            }, Ui.lp(Ui.WRAP, Ui.WRAP, t = 2))
+            ing.addView(box, Ui.lp(t = 8))
+        } else if (references().isNotEmpty()) {
+            ing.addView(Ui.button(c, tr("Adapter à la balance"), Ui.Style.SECONDARY, Icon.Kind.SCALE, height = 50, textSize = 16f) { chooseReference() },
+                Ui.lp(Ui.WRAP, Ui.WRAP, t = 8))
+        }
         for (g in shown.ingredients) {
             if (g.title.isNotBlank()) ing.addView(Ui.text(c, g.title, 17f, Ui.ACCENT, Ui.MEDIUM), Ui.lp(t = 12, b = 2))
             for (i in g.items) {
@@ -179,11 +207,24 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
     private fun quantity(qty: String, unit: String): String = listOf(qty.trim(), unit.trim()).filter { it.isNotEmpty() }.joinToString(" ")
 
     private fun save(next: RecipeAdjustments) {
-        adjustments = next
+        if (scaled != null) {
+            // Prorata en cours : la retouche vaut aussi pour cette fois seulement.
+            scaled = next
+        } else {
+            adjustments = next
+            a.app.recipes.setAdjustments(recipe.id, next)
+        }
         shown = recipe.adjusted(next)
-        a.app.recipes.setAdjustments(recipe.id, next)
         renderIngredients()
         renderSteps()
+    }
+
+    /** Adaptations affichées : celles de cette fois (prorata) ou celles enregistrées. */
+    private val currentAdj: RecipeAdjustments get() = scaled ?: adjustments
+
+    private fun cook() {
+        a.prefs.guidedScale = scaled?.let { recipe.id + "\n" + it.encode() } ?: ""
+        a.push(CookScreen(a, shown, 0))
     }
 
     private fun editNote() = editor(
@@ -193,7 +234,16 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         hint = tr("Ex. : moins d'eau la prochaine fois"),
         lines = 2,
         reset = if (adjustments.note.isBlank()) null else tr("Effacer"),
-    ) { text -> save(adjustments.withNote(text.orEmpty())); true }
+    ) { text ->
+        // La note est toujours enregistrée, prorata ou pas.
+        val t = text.orEmpty()
+        adjustments = adjustments.withNote(t)
+        a.app.recipes.setAdjustments(recipe.id, adjustments)
+        scaled = scaled?.withNote(t)
+        shown = recipe.adjusted(currentAdj)
+        renderIngredients()
+        true
+    }
 
     private fun editQuantity(i: Ingredient) {
         val original = i.originalQty.ifBlank { i.qty }
@@ -210,7 +260,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
             hint = original,
             number = number,
             reset = if (i.originalQty.isBlank()) null else tr("Valeur de la recette"),
-        ) { text -> save(adjustments.withQty(i, text.orEmpty())); true }
+        ) { text -> save(currentAdj.withQty(i, text.orEmpty())); true }
     }
 
     /** 0.5 → « 0,5 », 2.0 → « 2 », 0.333… → « 0,33 ». */
@@ -234,7 +284,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
                 a.toast(tr("Entrez un poids entre 1 et %d g", RecipeAdjustments.MAX_GRAMS), Ui.WARN)
                 false
             } else {
-                save(adjustments.withWeigh(index, w, grams))
+                save(currentAdj.withWeigh(index, w, grams))
                 true
             }
         }
@@ -308,6 +358,113 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         card.requestLayout()
         input.requestFocus()
         input.post { imm.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT) }
+    }
+
+    // ------------------------------------------------------------------ prorata par la balance
+
+    /** Ingrédients qui se pèsent (indice dans allIngredients), candidats pour servir de référence. */
+    private fun references(): List<Int> {
+        val items = recipe.adjusted(adjustments).allIngredients
+        return items.indices.filter { Proportions.factor(items[it], 1) != null }
+    }
+
+    private fun shortName(i: Ingredient): String =
+        QuantityLinks.keyName(i.name).substringBefore(',').trim().ifEmpty { i.name.trim() }
+
+    private fun chooseReference() {
+        val items = recipe.adjusted(adjustments).allIngredients
+        val card = Ui.card(c, 28f, Ui.SURFACE2)
+        card.setPadding(Ui.u(32), Ui.u(26), Ui.u(32), Ui.u(24))
+        card.addView(Ui.text(c, tr("Adapter à la balance"), 24f, Ui.TEXT, Ui.MEDIUM))
+        card.addView(Ui.text(c, tr("Choisissez l'ingrédient que vous allez peser : les autres quantités suivront en proportion, pour cette fois."),
+            17f, Ui.TEXT2).apply { setLineSpacing(0f, 1.15f) }, Ui.lp(t = 8))
+        val list = Ui.vertical(c)
+        for (k in references()) {
+            list.addView(Ui.button(c, items[k].display, Ui.Style.SECONDARY, Icon.Kind.SCALE, height = 56, textSize = 17f) {
+                a.closeOverlay()
+                weigh(k)
+            }, Ui.lp(Ui.MATCH, Ui.WRAP, t = 8))
+        }
+        card.addView(Ui.scroll(c, list), LinearLayout.LayoutParams(Ui.MATCH, Ui.u(minOf(300, 64 * references().size + 8))).apply { topMargin = Ui.u(8) })
+        val row = Ui.horizontal(c, Gravity.END or Gravity.CENTER_VERTICAL)
+        row.addView(Ui.button(c, tr("Annuler"), Ui.Style.GHOST, height = 56, textSize = 17f) { a.closeOverlay() })
+        card.addView(row, Ui.lp(t = 12))
+        a.showOverlay(card, 680)
+    }
+
+    private fun weigh(k: Int) {
+        val i = recipe.adjusted(adjustments).allIngredients.getOrNull(k) ?: return
+        val planned = QuantityLinks.currentGrams(i)?.let { Math.round(it).toInt() } ?: return
+        weighRef = k
+        val card = Ui.card(c, 28f, Ui.SURFACE2)
+        card.setPadding(Ui.u(32), Ui.u(26), Ui.u(32), Ui.u(24))
+        card.addView(Ui.ellipsize(Ui.text(c, tr("Peser : %s", shortName(i)), 24f, Ui.TEXT, Ui.MEDIUM)))
+        card.addView(Ui.text(c, tr("Recette : %d g. Posez un récipient sur le robot, touchez Tare, puis mettez l'ingrédient.", planned),
+            17f, Ui.TEXT2).apply { setLineSpacing(0f, 1.15f) }, Ui.lp(t = 8))
+        val value = Ui.text(c, "—", 64f, Ui.TEXT, Ui.THIN)
+        card.addView(value, Ui.lp(Ui.WRAP, Ui.WRAP, t = 10).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        val info = Ui.text(c, "", 18f, Ui.ACCENT, Ui.MEDIUM)
+        card.addView(info, Ui.lp(Ui.WRAP, Ui.WRAP, b = 14).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        val row = Ui.horizontal(c, Gravity.END or Gravity.CENTER_VERTICAL)
+        row.addView(Ui.button(c, tr("Tare"), Ui.Style.SECONDARY, Icon.Kind.SCALE, height = 56, textSize = 17f) { a.machine.tare() })
+        row.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
+        row.addView(Ui.button(c, tr("Annuler"), Ui.Style.GHOST, height = 56, textSize = 17f) { closeWeigh() })
+        row.addView(Ui.spacer(c, w = 12))
+        row.addView(Ui.button(c, tr("Valider"), Ui.Style.PRIMARY, Icon.Kind.CHECK, height = 56, textSize = 17f) { applyWeight(k) })
+        card.addView(row)
+        weighValue = value
+        weighInfo = info
+        a.showOverlay(card, 680, dismissOnScrim = false)
+        onSnapshot(a.snapshot)
+    }
+
+    private fun closeWeigh() {
+        weighRef = -1
+        weighValue = null
+        weighInfo = null
+        a.closeOverlay()
+    }
+
+    private fun applyWeight(k: Int) {
+        val s = a.snapshot
+        val i = recipe.adjusted(adjustments).allIngredients.getOrNull(k) ?: return closeWeigh()
+        val planned = QuantityLinks.currentGrams(i) ?: return closeWeigh()
+        val grams = s.weightG
+        val f = if (s.hasSample) Proportions.factor(i, grams) else null
+        if (f == null || f < Proportions.MIN_FACTOR || f > Proportions.MAX_FACTOR) {
+            a.toast(tr("Poids hors limites : entre %d et %d g pour cet ingrédient",
+                Math.ceil(planned * Proportions.MIN_FACTOR).toInt(), Math.floor(planned * Proportions.MAX_FACTOR).toInt()), Ui.WARN)
+            return
+        }
+        val next = Proportions.scale(recipe, adjustments, k, grams) ?: return closeWeigh()
+        val percent = Math.round(f * 100).toInt()
+        scaled = next
+        scaleNote = tr("Recette à %d %% d'après la balance (%s : %d g), pour cette fois.", percent, shortName(i), grams)
+        shown = recipe.adjusted(next)
+        closeWeigh()
+        renderIngredients()
+        renderSteps()
+        if (percent > 100) a.toast(tr("Recette à %d %% : attention à la contenance du bol. Les temps de cuisson ne changent pas.", percent), Ui.WARN)
+    }
+
+    override fun onSnapshot(s: Snapshot) {
+        val value = weighValue ?: return
+        val info = weighInfo ?: return
+        if (!s.hasSample) {
+            value.text = "—"
+            info.text = tr("Base non connectée")
+            return
+        }
+        value.text = "${s.weightG} g"
+        val i = recipe.adjusted(adjustments).allIngredients.getOrNull(weighRef)
+        val f = if (i != null && s.weightG > 0) Proportions.factor(i, s.weightG) else null
+        info.text = if (f == null) "" else tr("Recette à %d %%", Math.round(f * 100).toInt())
+    }
+
+    override fun onHide() {
+        weighRef = -1
+        weighValue = null
+        weighInfo = null
     }
 
     // ------------------------------------------------------------------ avis
@@ -424,7 +581,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
     }
 
     override fun onKnobPress(): Boolean {
-        a.push(CookScreen(a, shown, 0))
+        cook()
         return true
     }
 }

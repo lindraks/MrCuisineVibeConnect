@@ -186,6 +186,16 @@ object QuantityLinks {
         }
     }
 
+    /**
+     * Poids actuel de [i] en grammes (ml comptés comme g) s'il se pèse : unité de masse ou de volume,
+     * ou pièces avec leur poids entre parenthèses (« 2 échalotes (60 g) »). Null sinon (« 1 butternut »).
+     */
+    fun currentGrams(i: Ingredient): Double? {
+        val u = i.unit.trim().lowercase()
+        val weighable = u in setOf("g", "kg", "mg", "ml", "cl", "l") || (u.isEmpty() && PAREN_GRAMS.containsMatchIn(i.name))
+        return if (weighable) grams(i.copy(originalQty = "")) else null
+    }
+
     fun keyName(name: String): String =
         PAREN_GRAMS.replace(name) { m -> if (m.groupValues[1].isNotEmpty()) m.value else "" }.replace(Regex("\\s+"), " ").trim()
 
@@ -305,4 +315,103 @@ fun Recipe.adjusted(a: RecipeAdjustments): Recipe {
         if (text == s.text && weigh === w) s else s.copy(text = text, weigh = weigh)
     }
     return base.copy(ingredients = groups, steps = newSteps)
+}
+
+/**
+ * Prorata d'après la balance : l'ingrédient de référence est pesé (on met la butternut qu'on a),
+ * toutes les autres quantités suivent dans la même proportion, pour une fois (rien n'est
+ * enregistré). Les temps et réglages machine ne changent pas.
+ */
+object Proportions {
+    /** En dehors : pesée sans doute ratée (bol oublié, pas de tare). */
+    const val MIN_FACTOR = 0.2
+    const val MAX_FACTOR = 3.0
+
+    /** Facteur si [i] pèse en réalité [grams] g ; null si [i] ne se pèse pas. */
+    fun factor(i: Ingredient, grams: Int): Double? {
+        val g = QuantityLinks.currentGrams(i) ?: return null
+        return if (g > 0 && grams > 0) grams / g else null
+    }
+
+    /**
+     * Les adaptations [current] complétées pour que la recette [base] suive son ingrédient d'indice
+     * [ref] (dans `allIngredients`) pesé à [grams] g ; null si cet ingrédient ne se pèse pas. Les
+     * quantités sans nombre, le sel, le poivre et les pincées ne changent pas ; les pesées des étapes
+     * absentes de la liste (souvent l'eau) suivent aussi.
+     */
+    fun scale(base: Recipe, current: RecipeAdjustments, ref: Int, grams: Int): RecipeAdjustments? {
+        val shown = base.adjusted(current)
+        val items = shown.allIngredients
+        val r = items.getOrNull(ref) ?: return null
+        val f = factor(r, grams) ?: return null
+        var out = current
+        for ((k, i) in items.withIndex()) {
+            if (i.qty.isBlank()) continue
+            val v = (if (k == ref) refQty(i, grams, f) else scaledQty(i, f)) ?: continue
+            out = out.withQty(i, v)
+        }
+        for ((si, _) in base.unlistedWeighings()) {
+            val w = shown.steps.getOrNull(si)?.weigh ?: continue
+            out = out.withWeigh(si, w, QuantityLinks.scaled(w.grams, f).coerceAtMost(RecipeAdjustments.MAX_GRAMS))
+        }
+        return out
+    }
+
+    /** La référence prend exactement le poids lu, écrit dans son unité. */
+    private fun refQty(i: Ingredient, grams: Int, f: Double): String? = when (i.unit.trim().lowercase()) {
+        "g", "ml" -> grams.toString()
+        "mg" -> (grams * 1000).toString()
+        "cl" -> decimal(grams / 10.0, 1)
+        "kg", "l" -> decimal(grams / 1000.0, 3)
+        else -> scaledQty(i, f)
+    }
+
+    /** Quantité × [f], arrondie selon l'unité ; null si elle ne doit pas changer. */
+    fun scaledQty(i: Ingredient, f: Double): String? {
+        if (fixed(i)) return null
+        val q = QuantityLinks.parse(i.qty) ?: return null
+        val v = q * f
+        val u = QuantityLinks.norm(i.unit)
+        return when {
+            u == "g" || u == "ml" || u == "mg" -> Math.round(v).coerceAtLeast(1).toString()
+            u == "cl" -> decimal(v, 1)
+            u == "kg" || u == "l" -> decimal(v, 2)
+            spoon(u) -> fraction(v, 4)
+            else -> fraction(v, if (q < 1) 4 else 2)
+        }
+    }
+
+    /** Sel, poivre, pincées, pointes… : au goût, pas en proportion. */
+    private fun fixed(i: Ingredient): Boolean {
+        val all = QuantityLinks.norm(i.unit + " " + i.name)
+        if (listOf("pince", "pointe", "soupcon", "trait").any { all.contains(it) }) return true
+        val first = QuantityLinks.keywords(i.name).firstOrNull()
+        return first == "sel" || first == "poivre"
+    }
+
+    private fun spoon(u: String): Boolean =
+        u.startsWith("cuil") || u in setOf("c a s", "c a c", "cs", "cc", "c s", "c c", "cas", "cac")
+
+    /** 1.5 → « 1 ½ », 0.75 → « ¾ » (au quart ou au demi près, jamais 0). */
+    fun fraction(v: Double, denominator: Int): String {
+        val n = Math.round(v * denominator).toInt().coerceAtLeast(1)
+        val whole = n / denominator
+        val frac = when (denominator) {
+            4 -> when (n % 4) { 1 -> "¼"; 2 -> "½"; 3 -> "¾"; else -> "" }
+            else -> if (n % 2 == 1) "½" else ""
+        }
+        return when {
+            frac.isEmpty() -> whole.toString()
+            whole == 0 -> frac
+            else -> "$whole $frac"
+        }
+    }
+
+    /** 0.652 (3 décimales) → « 0,652 » ; jamais 0. */
+    private fun decimal(v: Double, places: Int): String {
+        val p = Math.pow(10.0, places.toDouble())
+        val r = (Math.round(v * p) / p).coerceAtLeast(1 / p)
+        val t = java.math.BigDecimal(r).setScale(places, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
+        return t.replace('.', ',')
+    }
 }

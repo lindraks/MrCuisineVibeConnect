@@ -6,6 +6,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import app.toque.core.i18n.I18n
 import app.toque.core.i18n.tr
+import app.toque.core.recipes.adjusted
+import app.toque.core.recipes.RecipeAdjustments
 import app.toque.ui.Icon
 import app.toque.ui.MainActivity
 import app.toque.ui.Screen
@@ -85,8 +87,11 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         resumeCard.addView(cancel, LinearLayout.LayoutParams(Ui.u(56), Ui.u(56)).apply { leftMargin = Ui.u(8) })
         resumeCard.isClickable = true
         resumeCard.setOnClickListener {
-            val r = a.app.recipes.getAdjusted(a.prefs.guidedRecipe)
-            if (r != null) a.push(CookScreen(a, r, a.prefs.guidedStep)) else { a.prefs.guidedRecipe = ""; refresh() }
+            val id = a.prefs.guidedRecipe
+            // Recette adaptée à la balance pour cette fois : on reprend ces quantités-là.
+            val scaled = a.prefs.guidedScale.takeIf { it.startsWith("$id\n") }?.substringAfter('\n')
+            val r = if (scaled != null) a.app.recipes.get(id)?.adjusted(RecipeAdjustments.decode(scaled)) else a.app.recipes.getAdjusted(id)
+            if (r != null) a.push(CookScreen(a, r, a.prefs.guidedStep)) else { a.prefs.guidedRecipe = ""; a.prefs.guidedScale = ""; refresh() }
         }
         left.addView(resumeCard, Ui.lp(Ui.MATCH, Ui.WRAP, t = 16))
         root.addView(left, LinearLayout.LayoutParams(0, Ui.MATCH, 0.42f).apply { rightMargin = Ui.u(28) })
@@ -185,6 +190,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             tr("Abandonner"), icon = Icon.Kind.CLOSE) {
             a.prefs.guidedRecipe = ""
             a.prefs.guidedStep = 0
+            a.prefs.guidedScale = ""
             refresh()
         }
     }
