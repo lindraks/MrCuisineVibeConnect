@@ -15,14 +15,11 @@ data class Release(
 
 /** Lecture de l'API GitHub « dernière version » et comparaison de numéros de version. */
 object Releases {
-    /** Dépôt dont Toque cherche les mises à jour : ce fork, validé sur l'appli d'origine en build 285. */
-    const val REPO = "McSoda/MrCuisineVibeConnect"
+    /** Dépôt dont Toque cherche les mises à jour : le fork de lindraks. */
+    const val REPO = "lindraks/MrCuisineVibeConnect"
 
-    /**
-     * Préfixe des APK de ce fork (« MCC-285-Toque-X.Y.Z.apk ») : il les distingue de ceux du dépôt
-     * d'origine tant que la compatibilité avec le build 292 de l'appli d'origine n'est pas vérifiée.
-     */
-    const val APK_PREFIX = "MCC-285-Toque-"
+    /** Nom des APK publiés par ce fork (« Toque-X.Y.Z.apk »), préférés à tout autre APK de la version. */
+    const val APK_PREFIX = "Toque-"
     const val LATEST_URL = "https://api.github.com/repos/$REPO/releases/latest"
     const val PAGE_URL = "https://github.com/$REPO/releases"
 

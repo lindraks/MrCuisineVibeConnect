@@ -50,8 +50,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           v="${{ steps.version.outputs.name }}"
-          cp app/build/outputs/apk/release/app-release.apk "MCC-285-Toque-$v.apk"
+          cp app/build/outputs/apk/release/app-release.apk "Toque-$v.apk"
           prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
           if [ -n "$prev" ]; then range="$prev..HEAD"; else range="HEAD"; fi
           git log --no-merges --pretty='- %s' $range > notes.md
-          gh release create "v$v" "MCC-285-Toque-$v.apk" --title "Toque $v (MCC 285)" --notes-file notes.md --target "$GITHUB_SHA"
+          gh release create "v$v" "Toque-$v.apk" --title "Toque $v" --notes-file notes.md --target "$GITHUB_SHA"
