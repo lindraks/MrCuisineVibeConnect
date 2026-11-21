@@ -105,18 +105,18 @@ class Prefs(context: Context) {
 
     /** Mise en veille de l'écran après ce nombre de minutes sans geste (0 : jamais). */
     var standbyMinutes: Int
-        get() = p.getInt("standbyMinutes", 10)
+        get() = p.getInt("standbyMinutes", 5)
         set(v) {
             p.edit().putInt("standbyMinutes", v).commit()
         }
 
     /**
      * Molette pendant la veille : « normal » (inchangée), « dim » (veilleuse blanche faible) ou
-     * « off » (éteinte). Reprend l'ancien interrupteur « standbyKnobLight » s'il a été réglé.
+     * « off » (éteinte, par défaut). Reprend l'ancien interrupteur « standbyKnobLight » s'il a été réglé.
      */
     var standbyKnob: String
         get() = p.getString("standbyKnob", null)
-            ?: if (p.getBoolean("standbyKnobLight", true)) "dim" else "normal"
+            ?: if (!p.contains("standbyKnobLight")) "off" else if (p.getBoolean("standbyKnobLight", true)) "dim" else "normal"
         set(v) {
             p.edit().putString("standbyKnob", v).commit()
         }
