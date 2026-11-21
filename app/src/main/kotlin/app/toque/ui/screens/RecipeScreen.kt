@@ -456,7 +456,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
             }
             fun change(n: Int) {
                 if (n < 1 || n > max || n == servings) return
-                setServings(n)
+                setServings(n, warn = false)
                 val next = ShoppingList.items(shown)
                 if (next.size != items.size) {
                     // Liste différente (ne devrait pas arriver) : on repart des cases par défaut.
@@ -513,7 +513,8 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         return row
     }
 
-    private fun setServings(n: Int) {
+    /** [warn] : rappel sur la contenance du bol au-delà des quantités prévues (pas dans la liste de courses). */
+    private fun setServings(n: Int, warn: Boolean = true) {
         val max = maxOf(recipe.servings * 3, recipe.servings + 2)
         if (n < 1 || n > max || n == servings) return
         val wasAbove = servings > recipe.servings
@@ -527,7 +528,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         shown = recipe.adjusted(currentAdj)
         renderIngredients()
         renderSteps()
-        if (n > recipe.servings && !wasAbove) {
+        if (warn && n > recipe.servings && !wasAbove) {
             a.toast(tr("Recette à %d %% : attention à la contenance du bol. Les temps de cuisson ne changent pas.",
                 Math.round(n * 100.0 / recipe.servings).toInt()), Ui.WARN)
         }
