@@ -289,7 +289,7 @@ object McOnline {
             for (st in settings) {
                 val ms = (st.int("time") ?: 0).coerceAtLeast(0) * 1000L
                 when {
-                    mode == "customized" -> {
+                    mode == "customized" || mode == "ramp" -> {
                         val speedF = (st["speedFloat"] as? Number)?.toDouble() ?: st.int("speed")?.toDouble() ?: 0.0
                         if (speedF % 1.0 != 0.0) return false
                         val speed = speedF.toInt()

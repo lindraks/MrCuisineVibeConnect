@@ -160,6 +160,9 @@ class McOnlineTest {
         assertNull(McOnline.parseRecipe(oneStep(smart, "customized", speed = 4.0, temp = 100)))  // trop vite en chauffe
         assertNull(McOnline.parseRecipe(oneStep(smart, "customized", time = 100 * 60)))     // plus de 99 min
         assertNull(McOnline.parseRecipe(oneStep(smart, "kneading_solid_dough", time = 300)))
+        // Montée en vitesse (« ramp ») : mêmes limites qu'un réglage manuel.
+        assertNotNull(McOnline.parseRecipe(oneStep(smart, "ramp", speed = 4.0)))
+        assertNull(McOnline.parseRecipe(oneStep(smart, "ramp", speed = 2.5)))
         // Recette du Connect : toujours gardée, l'étape inconnue reste à faire à la main.
         val connect = McOnline.parseRecipe(oneStep("\"MC2.0\",$smart", "puree"))!!
         assertTrue(connect.steps[0].text.contains("non pris en charge"))
