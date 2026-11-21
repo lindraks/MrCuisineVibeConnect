@@ -2,7 +2,9 @@ package app.toque.ui
 
 import android.app.Activity
 import android.content.Intent
+import android.media.AudioAttributes
 import android.media.AudioManager
+import android.media.MediaPlayer
 import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Handler
@@ -33,6 +35,7 @@ import app.toque.recipes.LidlSync
 import app.toque.recipes.SyncService
 import app.toque.ui.screens.HomeScreen
 import app.toque.ui.screens.SettingsScreen
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -51,6 +54,7 @@ class MainActivity : Activity() {
     private var unsubscribe: (() -> Unit)? = null
     private var unsubscribeEvents: (() -> Unit)? = null
     private var tone: ToneGenerator? = null
+    private var player: MediaPlayer? = null
     private var toastView: TextView? = null
     private var lastKnobMs = 0L
     private lateinit var sleepView: View
@@ -148,6 +152,8 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         tone?.release()
+        player?.release()
+        player = null
         super.onDestroy()
     }
 
@@ -333,12 +339,45 @@ class MainActivity : Activity() {
         wake()
         current?.onEvent(e)
         when (e.type) {
-            EventType.JOB_FINISHED -> chime(2)
+            EventType.JOB_FINISHED -> if (!playStepSound()) chime(2)
             EventType.FAULT -> { chime(3); toast(e.message, Ui.DANGER) }
             EventType.LID_OPENED -> if (snapshot.busy || snapshot.state != null) toast(tr("Couvercle ouvert : pause"), Ui.WARN)
             EventType.JOB_PAUSED -> if (e.message != PauseReason.USER.label) toast(e.message, Ui.WARN)
             EventType.TURBO_END -> toast(e.message, Ui.TEXT2)
             else -> Unit
+        }
+    }
+
+    /**
+     * Son de fin d'étape personnalisé : un fichier « fin-etape.* » (m4a, mp3, ogg, wav) déposé par adb dans
+     * /sdcard/Android/data/app.toque/files/sons/. Absent ou illisible : le double bip habituel.
+     */
+    private fun playStepSound(): Boolean {
+        if (!prefs.sound) return false
+        val dir: File? = try { getExternalFilesDir("sons") } catch (_: Exception) { null }
+        val f = dir?.listFiles()?.filter { it.isFile && it.name.startsWith("fin-etape.") }?.minByOrNull { it.name } ?: return false
+        player?.release()
+        player = null
+        return try {
+            val mp = MediaPlayer()
+            player = mp
+            mp.setAudioAttributes(AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build())
+            mp.setDataSource(f.absolutePath)
+            mp.setOnCompletionListener { done ->
+                done.release()
+                if (player === done) player = null
+            }
+            mp.prepare()
+            mp.start()
+            true
+        } catch (e: Exception) {
+            player?.release()
+            player = null
+            app.log.write("son", "son de fin d'étape illisible (${f.name}) : $e")
+            false
         }
     }
 
