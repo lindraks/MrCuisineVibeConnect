@@ -2,7 +2,9 @@ package app.toque.ui
 
 import android.app.Activity
 import android.content.Intent
+import android.media.AudioAttributes
 import android.media.AudioManager
+import android.media.MediaPlayer
 import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Handler
@@ -32,6 +34,7 @@ import app.toque.recipes.SyncService
 import app.toque.ui.screens.HomeScreen
 import app.toque.ui.screens.KnobSetupScreen
 import app.toque.ui.screens.SettingsScreen
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -50,6 +53,7 @@ class MainActivity : Activity() {
     private var unsubscribe: (() -> Unit)? = null
     private var unsubscribeEvents: (() -> Unit)? = null
     private var tone: ToneGenerator? = null
+    private var player: MediaPlayer? = null
     private var toastView: TextView? = null
     private var lastKnobMs = 0L
     private lateinit var standby: Standby
@@ -141,6 +145,8 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         tone?.release()
+        player?.release()
+        player = null
         super.onDestroy()
     }
 
@@ -287,7 +293,9 @@ class MainActivity : Activity() {
         current?.onEvent(e)
         if (e.type != EventType.LINK_CHANGED && e.type != EventType.PHASE_CHANGED) standby.poke()
         when (e.type) {
-            EventType.JOB_FINISHED -> if (!ownSound) chime(2)
+            // Fin d'étape : le son d'étape (Anouk), sinon le double bip ; la dernière étape d'une
+            // recette joue la mélodie de fin à la place (CookScreen.ownsFinishSound).
+            EventType.JOB_FINISHED -> if (!ownSound && !playStepSound()) chime(2)
             EventType.FAULT -> { chime(3); toast(e.message, Ui.DANGER) }
             EventType.LID_OPENED -> if (snapshot.busy || snapshot.state != null) toast(tr("Couvercle ouvert : pause"), Ui.WARN)
             EventType.JOB_PAUSED -> if (e.message != PauseReason.USER.label) toast(e.message, Ui.WARN)
@@ -304,6 +312,47 @@ class MainActivity : Activity() {
     /** Fin de recette : mélodie forte, comme l'appli d'origine. */
     fun recipeDoneSound() {
         if (prefs.sound) Sounds.recipeDone()
+    }
+
+    /**
+     * Son de fin d'étape : d'abord un fichier « fin-etape.* » (m4a, mp3, ogg, wav) déposé par adb dans
+     * /sdcard/Android/data/app.toque/files/sons/, sinon le son intégré (assets/sons/fin-etape.m4a).
+     * Aucun des deux lisible : le double bip habituel.
+     */
+    private fun playStepSound(): Boolean {
+        if (!prefs.sound) return false
+        val dir: File? = try { getExternalFilesDir("sons") } catch (_: Exception) { null }
+        val custom = dir?.listFiles()?.filter { it.isFile && it.name.startsWith("fin-etape.") }?.minByOrNull { it.name }
+        if (custom != null && play(custom.name) { it.setDataSource(custom.absolutePath) }) return true
+        return play(STEP_SOUND_ASSET) { mp ->
+            assets.openFd(STEP_SOUND_ASSET).use { fd -> mp.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length) }
+        }
+    }
+
+    private fun play(name: String, source: (MediaPlayer) -> Unit): Boolean {
+        player?.release()
+        player = null
+        return try {
+            val mp = MediaPlayer()
+            player = mp
+            mp.setAudioAttributes(AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build())
+            source(mp)
+            mp.setOnCompletionListener { done ->
+                done.release()
+                if (player === done) player = null
+            }
+            mp.prepare()
+            mp.start()
+            true
+        } catch (e: Exception) {
+            player?.release()
+            player = null
+            app.log.write("son", "son de fin d'étape illisible ($name) : $e")
+            false
+        }
     }
 
     fun chime(times: Int = 1) {
@@ -495,6 +544,8 @@ class MainActivity : Activity() {
 
         /** MotionEvent.AXIS_SCROLL (API 26), valeur fixe pour Android 6. */
         private const val AXIS_SCROLL = 26
+        /** Son de fin d'étape intégré à l'appli. */
+        private const val STEP_SOUND_ASSET = "sons/fin-etape.m4a"
         private val clockFormat = SimpleDateFormat("HH:mm", Locale.FRANCE)
 
         /** Heure affichée ; le fuseau peut changer en cours de route (réglage automatique). */
