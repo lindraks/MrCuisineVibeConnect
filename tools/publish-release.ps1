@@ -2,13 +2,13 @@
 # when GitHub Actions is available): tag vX.Y.Z, release notes from the commits, the APK attached.
 # Robots then find it in Settings > Updates, and toque-setup.ps1 downloads it.
 #
-#   powershell -ExecutionPolicy Bypass -File tools\publish-release.ps1 -Apk Toque-0.5.1.apk [-RepoInfo]
+#   powershell -ExecutionPolicy Bypass -File tools\publish-release.ps1 -Apk MCC-285-Toque-0.5.2.apk [-RepoInfo]
 #
 # Token: $env:GH_TOKEN, else $env:GITHUB_TOKEN, else "gh auth token", else the github.com
 # credential already stored for git (Git Credential Manager). It is never printed.
 param(
     [Parameter(Mandatory = $true)][string]$Apk,
-    [string]$Repo = "Wuki60/MrCuisineVibeConnect",
+    [string]$Repo = "McSoda/MrCuisineVibeConnect",
     [switch]$RepoInfo
 )
 $ErrorActionPreference = "Stop"
@@ -59,7 +59,7 @@ if (-not $release) {
     Write-Host "Release $tag already exists."
 }
 
-$name = "Toque-$version.apk"
+$name = "MCC-285-Toque-$version.apk"
 if (-not ($release.assets | Where-Object { $_.name -eq $name })) {
     $upload = "https://uploads.github.com/repos/$Repo/releases/$($release.id)/assets?name=$name"
     Invoke-RestMethod -Method Post -Uri $upload -Headers $h -InFile $Apk -ContentType "application/vnd.android.package-archive" | Out-Null

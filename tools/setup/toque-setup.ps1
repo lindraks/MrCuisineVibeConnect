@@ -35,7 +35,7 @@ $Known = @{
     DriverCab  = @{ Name = "20896845_fdc6bb5aa9a9bac99adf85d931d6c21d1130a96e.cab"; Sha = "ce72e97c07582ad41debfaeee6f6284ecd28285df5f9caa05193653fb236561f" }
     FlashTool  = @{ Sha = "67e9eb48161087d43eca845b2dc0e9beacac3c0381bd1ce7989d48b17e2084a7" }
     FlashDA    = @{ Sha = "9cbf39f3925fe88d18bd4c4e45dd1c01741bf7a31a4f69252dfb318d229c0346" }
-    Releases   = "https://api.github.com/repos/Wuki60/MrCuisineVibeConnect/releases/latest"
+    Releases   = "https://api.github.com/repos/McSoda/MrCuisineVibeConnect/releases/latest"
 }
 $PartitionSize = 16777216   # boot and recovery: 16 MiB each
 $ByName = "/dev/block/platform/mtk-msdc.0/11120000.msdc0/by-name"
@@ -252,7 +252,7 @@ function Step-Prepare {
     if ($Apk -eq "") {
         try {
             $rel = Invoke-RestMethod -Uri $Known.Releases -Headers @{ "User-Agent" = "toque-setup" }
-            $asset = $rel.assets | Where-Object { $_.name -like "Toque-*.apk" } | Select-Object -First 1
+            $asset = $rel.assets | Where-Object { $_.name -like "MCC-285-Toque-*.apk" } | Select-Object -First 1
             if ($asset) {
                 $dest = Join-Path $Downloads $asset.name
                 if (-not (Test-Path $dest)) { Fetch $asset.browser_download_url $dest }
@@ -422,7 +422,7 @@ function Step-Android {
 function Step-Install {
     $apkPath = $Apk
     if ($apkPath -eq "") {
-        $latest = Get-ChildItem $Downloads -Filter "Toque-*.apk" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        $latest = Get-ChildItem $Downloads -Filter "MCC-285-Toque-*.apk" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
         if ($latest) { $apkPath = $latest.FullName }
     }
     if ($apkPath -eq "" -or -not (Test-Path $apkPath)) { Fail "No Toque APK: run 'prepare' (downloads the latest release) or pass -Apk <file>." }

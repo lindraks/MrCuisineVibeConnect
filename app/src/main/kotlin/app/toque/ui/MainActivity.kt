@@ -9,7 +9,6 @@ import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -27,13 +26,13 @@ import app.toque.core.machine.EventType
 import app.toque.core.machine.JobSpec
 import app.toque.core.machine.MachineEvent
 import app.toque.core.machine.PauseReason
-import app.toque.core.machine.RootShell
 import app.toque.core.machine.SafetyPolicy
 import app.toque.core.machine.Snapshot
 import app.toque.core.machine.Verdict
 import app.toque.recipes.LidlSync
 import app.toque.recipes.SyncService
 import app.toque.ui.screens.HomeScreen
+import app.toque.ui.screens.KnobSetupScreen
 import app.toque.ui.screens.SettingsScreen
 import java.io.File
 import java.text.SimpleDateFormat
@@ -57,12 +56,8 @@ class MainActivity : Activity() {
     private var player: MediaPlayer? = null
     private var toastView: TextView? = null
     private var lastKnobMs = 0L
-    private lateinit var sleepView: View
-    private var lastInputMs = 0L
-    private var asleep = false
-    /** LED du bouton (rouge, vert, bleu) mémorisée à l'entrée en veille, rétablie au réveil. */
-    @Volatile private var savedLed: List<Int>? = null
-    private val ledExec = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private lateinit var standby: Standby
+    private var swallowTouch = false
     var knobListener: ((KeyEvent) -> Unit)? = null
 
     val prefs: Prefs get() = app.prefs
@@ -75,10 +70,10 @@ class MainActivity : Activity() {
         val dm = resources.displayMetrics
         Ui.init(dm.widthPixels, dm.heightPixels)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Ui.BG))
+        window.setBackgroundDrawable(Ui.background())
 
         root = FrameLayout(this)
-        root.setBackgroundColor(Ui.BG)
+        root.background = Ui.background()
         val column = Ui.vertical(this)
         topBar = TopBar(this)
         column.addView(topBar, Ui.lp(Ui.MATCH, Ui.u(60)))
@@ -90,13 +85,8 @@ class MainActivity : Activity() {
         overlay = FrameLayout(this)
         overlay.visibility = View.GONE
         root.addView(overlay, Ui.flp())
-        // Veille douce : voile noir par-dessus tout, luminosité au minimum ; la tablette reste éveillée.
-        sleepView = View(this).apply {
-            setBackgroundColor(0xFF000000.toInt())
-            visibility = View.GONE
-        }
-        root.addView(sleepView, Ui.flp())
         setContentView(root)
+        standby = Standby(this, root)
 
         try {
             tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 85)
@@ -110,6 +100,10 @@ class MainActivity : Activity() {
         if (reopenSettings) {
             reopenSettings = false
             push(SettingsScreen(this))
+        } else if (!prefs.knobReady && !prefs.knobSetupShown) {
+            // Premier lancement : le bouton du robot n'envoie pas les mêmes touches partout.
+            prefs.knobSetupShown = true
+            push(KnobSetupScreen(this))
         }
     }
 
@@ -126,11 +120,11 @@ class MainActivity : Activity() {
             topBar.update(s)
             machineBar.update(s)
             stack.lastOrNull()?.onSnapshot(s)
+            standby.onSnapshot(s)
         }
         unsubscribeEvents = app.machine.onEvent { e -> onMachineEvent(e) }
         topBar.startClock()
-        lastInputMs = SystemClock.uptimeMillis()
-        main.postDelayed(idleCheck, IDLE_CHECK_MS)
+        standby.start()
     }
 
     override fun onResume() {
@@ -142,11 +136,10 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
-        main.removeCallbacks(idleCheck)
-        wake()
         unsubscribe?.invoke()
         unsubscribeEvents?.invoke()
         topBar.stopClock()
+        standby.stop()
         super.onStop()
     }
 
@@ -227,78 +220,41 @@ class MainActivity : Activity() {
         back()
     }
 
-    // ------------------------------------------------------------------ veille de l'écran
-
-    /** Toutes les 15 s : voile noir après [SLEEP_AFTER_MS] sans toucher, jamais pendant une cuisson ni bol chaud. */
-    private val idleCheck = object : Runnable {
-        override fun run() {
-            val s = snapshot
-            val idle = SystemClock.uptimeMillis() - lastInputMs > SLEEP_AFTER_MS
-            if (!asleep && prefs.screenSleep && idle && !s.busy && !s.jobActive && !s.hot) sleep()
-            main.postDelayed(this, IDLE_CHECK_MS)
-        }
-    }
-
-    private fun sleep() {
-        asleep = true
-        hideKeyboard()
-        sleepView.visibility = View.VISIBLE
-        window.attributes = window.attributes.apply { screenBrightness = 0.01f }
-        if (prefs.mode == Prefs.Mode.HARDWARE) ledExec.execute {
-            // Lit puis éteint la LED du bouton (fichiers du noyau, accessibles en root).
-            val r = RootShell.run(
-                "cd $LED_DIR && for c in $LED_COLORS; do printf '%s ' \$(cat \$c/brightness); done; " +
-                    "for c in $LED_COLORS; do echo 0 > \$c/brightness; done", 5_000)
-            val values = r.out.trim().split(' ').mapNotNull { it.toIntOrNull() }
-            if (r.ok && values.size == 3 && values.any { it > 0 }) savedLed = values
-        }
-    }
-
-    /** Rallume l'écran (toucher, bouton, événement machine). */
-    fun wake() {
-        lastInputMs = SystemClock.uptimeMillis()
-        if (!asleep) return
-        asleep = false
-        sleepView.visibility = View.GONE
-        window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
-        ledExec.execute {
-            val v = savedLed ?: return@execute
-            savedLed = null
-            RootShell.run(
-                "cd $LED_DIR && echo ${v[0]} > red/brightness && echo ${v[1]} > green/brightness && echo ${v[2]} > blue/brightness", 5_000)
-        }
-    }
-
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (asleep) {
-            // Le geste qui rallume l'écran n'atteint pas l'interface.
-            if (ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL) wake()
-            return true
-        }
-        lastInputMs = SystemClock.uptimeMillis()
-        return super.dispatchTouchEvent(ev)
-    }
-
     // ------------------------------------------------------------------ bouton rotatif
 
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (asleep) {
-            if (event.action == KeyEvent.ACTION_UP) wake()
+    // ------------------------------------------------------------------ veille
+
+    /** Le geste qui réveille l'écran ne fait rien d'autre (on ne lance rien en le touchant dans le noir). */
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) swallowTouch = standby.onInput()
+        if (swallowTouch) {
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) swallowTouch = false
             return true
         }
-        lastInputMs = SystemClock.uptimeMillis()
+        return super.dispatchTouchEvent(event)
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN && standby.onKnob()) return true
         knobListener?.let { l ->
             if (event.action == KeyEvent.ACTION_DOWN) l(event)
             return true
         }
         if (event.action == KeyEvent.ACTION_DOWN && overlay.visibility != View.VISIBLE) {
             val k = event.keyCode
-            val left = prefs.knobLeft.let { if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_LEFT }
-            val right = prefs.knobRight.let { if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_RIGHT }
+            // Par défaut : les flèches, et les touches du bouton du robot (clavier mtk-kpd :
+            // F6 à droite, F7 à gauche, F5 à l'appui).
+            val left = prefs.knobLeft.let {
+                if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_F7
+            }
+            val right = prefs.knobRight.let {
+                if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_RIGHT || k == KeyEvent.KEYCODE_F6
+            }
             val press = prefs.knobPress.let {
-                if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER
+                if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER || k == KeyEvent.KEYCODE_F5
             }
             val s = current
+            if ((left || right || press) && !prefs.knobSetupDone) prefs.knobSetupDone = true
             if (s != null) {
                 // Tourner le bouton sert toujours à l'écran, même après une recherche : le champ de
                 // saisie lâche le focus et le clavier se ferme. L'appui reste au champ s'il a le focus.
@@ -316,17 +272,14 @@ class MainActivity : Activity() {
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
-        if (asleep) {
-            wake()
-            return true
-        }
-        lastInputMs = SystemClock.uptimeMillis()
+        if (event.action == MotionEvent.ACTION_SCROLL && standby.onKnob()) return true
         if (event.action == MotionEvent.ACTION_SCROLL) {
             // Encodeur rotatif (AXIS_SCROLL) ou molette (AXIS_VSCROLL)
             val v = event.getAxisValue(AXIS_SCROLL).let { if (it == 0f) -event.getAxisValue(MotionEvent.AXIS_VSCROLL) else it }
             val now = System.currentTimeMillis()
             if (v != 0f && now - lastKnobMs > 40) {
                 lastKnobMs = now
+                if (!prefs.knobSetupDone) prefs.knobSetupDone = true
                 if (current?.onKnob(if (v > 0) 1 else -1) == true) return true
             }
         }
@@ -336,16 +289,29 @@ class MainActivity : Activity() {
     // ------------------------------------------------------------------ évènements machine
 
     private fun onMachineEvent(e: MachineEvent) {
-        wake()
+        val ownSound = current?.ownsFinishSound(e) == true
         current?.onEvent(e)
+        if (e.type != EventType.LINK_CHANGED && e.type != EventType.PHASE_CHANGED) standby.poke()
         when (e.type) {
-            EventType.JOB_FINISHED -> if (!playStepSound()) chime(2)
+            // Fin d'étape : le son d'étape (Anouk), sinon le double bip ; la dernière étape d'une
+            // recette joue la mélodie de fin à la place (CookScreen.ownsFinishSound).
+            EventType.JOB_FINISHED -> if (!ownSound && !playStepSound()) chime(2)
             EventType.FAULT -> { chime(3); toast(e.message, Ui.DANGER) }
             EventType.LID_OPENED -> if (snapshot.busy || snapshot.state != null) toast(tr("Couvercle ouvert : pause"), Ui.WARN)
             EventType.JOB_PAUSED -> if (e.message != PauseReason.USER.label) toast(e.message, Ui.WARN)
             EventType.TURBO_END -> toast(e.message, Ui.TEXT2)
             else -> Unit
         }
+    }
+
+    /** Quantité à peser atteinte. */
+    fun weighBeep() {
+        if (prefs.sound) Sounds.weighReached(prefs.weighSound)
+    }
+
+    /** Fin de recette : mélodie forte, comme l'appli d'origine. */
+    fun recipeDoneSound() {
+        if (prefs.sound) Sounds.recipeDone()
     }
 
     /**
@@ -576,17 +542,10 @@ class MainActivity : Activity() {
     companion object {
         private var reopenSettings = false
 
-        /** Veille de l'écran : délai sans toucher, et fréquence du contrôle. */
-        private const val SLEEP_AFTER_MS = 5 * 60_000L
-        private const val IDLE_CHECK_MS = 15_000L
-        /** LED du bouton rotatif : trois canaux du noyau (0 à 255). */
-        private const val LED_DIR = "/sys/class/leds"
-        private const val LED_COLORS = "red green blue"
-        /** Son de fin d'étape intégré à l'appli. */
-        private const val STEP_SOUND_ASSET = "sons/fin-etape.m4a"
-
         /** MotionEvent.AXIS_SCROLL (API 26), valeur fixe pour Android 6. */
         private const val AXIS_SCROLL = 26
+        /** Son de fin d'étape intégré à l'appli. */
+        private const val STEP_SOUND_ASSET = "sons/fin-etape.m4a"
         private val clockFormat = SimpleDateFormat("HH:mm", Locale.FRANCE)
 
         /** Heure affichée ; le fuseau peut changer en cours de route (réglage automatique). */

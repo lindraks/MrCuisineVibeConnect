@@ -25,7 +25,7 @@ class UpdateTest {
              "assets":[
                {"name":"notes.txt","size":12,"browser_download_url":"https://example.invalid/notes.txt"},
                {"name":"Toque-0.2.0.apk","size":2345678,
-                "browser_download_url":"https://github.com/Wuki60/MrCuisineVibeConnect/releases/download/v0.2.0/Toque-0.2.0.apk"}
+                "browser_download_url":"https://github.com/lindraks/MrCuisineVibeConnect/releases/download/v0.2.0/Toque-0.2.0.apk"}
              ]}
         """.trimIndent()
         val r = Releases.parse(json)
@@ -36,6 +36,27 @@ class UpdateTest {
         assertEquals("Toque-0.2.0.apk", r.apkName)
         assertEquals(2345678L, r.apkSize)
         assertTrue(r.apkUrl!!.endsWith("/v0.2.0/Toque-0.2.0.apk"))
+    }
+
+    @Test fun prefersTheToqueApkOverAnyOtherApk() {
+        val json = """
+            {"tag_name":"v0.5.2","name":"","body":"","assets":[
+              {"name":"Autre-0.5.2.apk","size":1,"browser_download_url":"https://example.invalid/Autre-0.5.2.apk"},
+              {"name":"Toque-0.5.2.apk","size":2,"browser_download_url":"https://example.invalid/Toque-0.5.2.apk"}
+            ]}
+        """.trimIndent()
+        assertEquals("Toque-0.5.2.apk", Releases.parse(json).apkName)
+    }
+
+    @Test fun fallsBackToAnotherApkWhenThereIsNoToqueOne() {
+        val json = """{"tag_name":"v0.5.2","assets":[{"name":"Autre-0.5.2.apk","size":1,"browser_download_url":"https://example.invalid/a.apk"}]}"""
+        assertEquals("Autre-0.5.2.apk", Releases.parse(json).apkName)
+    }
+
+    @Test fun updatesComeFromThisFork() {
+        assertEquals("lindraks/MrCuisineVibeConnect", Releases.REPO)
+        assertTrue(Releases.LATEST_URL.contains("/lindraks/MrCuisineVibeConnect/"))
+        assertEquals("Toque-", Releases.APK_PREFIX)
     }
 
     @Test fun releaseWithoutApk() {

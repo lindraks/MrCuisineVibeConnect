@@ -69,11 +69,11 @@ class Prefs(context: Context) {
             p.edit().putBoolean("requireBowl", v).commit()
         }
 
-    /** Écran au noir après 5 min sans utilisation (jamais pendant une cuisson ni bol chaud). */
-    var screenSleep: Boolean
-        get() = p.getBoolean("screenSleep", true)
+    /** Capteur du bol lu à l'envers (bases qui signalent « bol » quand il est retiré). */
+    var invertBowl: Boolean
+        get() = p.getBoolean("invertBowl", false)
         set(v) {
-            p.edit().putBoolean("screenSleep", v).commit()
+            p.edit().putBoolean("invertBowl", v).commit()
         }
 
     /** Faire confirmer chaque réglage machine importé d'une recette avant de pouvoir le lancer. */
@@ -101,6 +101,24 @@ class Prefs(context: Context) {
         get() = p.getBoolean("sound", true)
         set(v) {
             p.edit().putBoolean("sound", v).commit()
+        }
+
+    /** Mise en veille de l'écran après ce nombre de minutes sans geste (0 : jamais). */
+    var standbyMinutes: Int
+        get() = p.getInt("standbyMinutes", 5)
+        set(v) {
+            p.edit().putInt("standbyMinutes", v).commit()
+        }
+
+    /**
+     * Molette pendant la veille : « normal » (inchangée), « dim » (veilleuse blanche faible) ou
+     * « off » (éteinte, par défaut). Reprend l'ancien interrupteur « standbyKnobLight » s'il a été réglé.
+     */
+    var standbyKnob: String
+        get() = p.getString("standbyKnob", null)
+            ?: if (!p.contains("standbyKnobLight")) "off" else if (p.getBoolean("standbyKnobLight", true)) "dim" else "normal"
+        set(v) {
+            p.edit().putString("standbyKnob", v).commit()
         }
 
     /** Fuseau horaire : « auto » (d'après la connexion Internet) ou un identifiant IANA choisi à la main. */
@@ -173,6 +191,23 @@ class Prefs(context: Context) {
             p.edit().putInt("knobPress", v).commit()
         }
 
+    /** Vrai une fois le bouton rotatif réglé, vu en marche, ou déclaré absent de l'appareil. */
+    var knobSetupDone: Boolean
+        get() = p.getBoolean("knobSetupDone", false)
+        set(v) {
+            p.edit().putBoolean("knobSetupDone", v).commit()
+        }
+
+    /** Le réglage guidé n'est proposé d'office qu'une fois ; ensuite, l'accueil le rappelle. */
+    var knobSetupShown: Boolean
+        get() = p.getBoolean("knobSetupShown", false)
+        set(v) {
+            p.edit().putBoolean("knobSetupShown", v).commit()
+        }
+
+    /** Faux tant que rien ne dit que le bouton rotatif fonctionne : l'accueil affiche alors un rappel. */
+    val knobReady: Boolean get() = knobSetupDone || knobLeft >= 0 || knobRight >= 0 || knobPress >= 0
+
     var lastCrashMs: Long
         get() = p.getLong("lastCrashMs", 0)
         set(v) {
@@ -202,5 +237,19 @@ class Prefs(context: Context) {
         get() = p.getInt("guidedStep", 0)
         set(v) {
             p.edit().putInt("guidedStep", v).commit()
+        }
+
+    /** Réglages importés déjà vérifiés (« J'ai vérifié ce réglage »), clé = recette, étape et réglage. */
+    var reviewedSteps: Set<String>
+        get() = HashSet(p.getStringSet("reviewedSteps", emptySet()) ?: emptySet())
+        set(v) {
+            p.edit().putStringSet("reviewedSteps", HashSet(v)).commit()
+        }
+
+    /** Son joué quand la quantité à peser est atteinte (voir Sounds.WEIGH_SOUNDS). */
+    var weighSound: String
+        get() = p.getString("weighSound", "ding") ?: "ding"
+        set(v) {
+            p.edit().putString("weighSound", v).commit()
         }
 }

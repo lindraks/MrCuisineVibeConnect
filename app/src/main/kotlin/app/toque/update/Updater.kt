@@ -1,6 +1,5 @@
 package app.toque.update
 
-import app.toque.ExtraRoots
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -8,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Handler
 import android.os.Looper
+import app.toque.ExtraRoots
 import app.toque.ToqueApp
 import app.toque.core.i18n.tr
 import app.toque.core.machine.RootShell
@@ -18,8 +18,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
-import javax.net.ssl.HttpsURLConnection
 import java.net.URL
+import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLException
 
 /**
@@ -66,7 +66,7 @@ class Updater(private val context: Context) {
         val dir = File(context.cacheDir, "maj")
         dir.mkdirs()
         dir.listFiles()?.forEach { it.delete() }
-        val file = File(dir, "Toque-${r.version}.apk")
+        val file = File(dir, "${Releases.APK_PREFIX}${r.version}.apk")
         val c = open(url, "application/octet-stream")
         try {
             if (c.responseCode != 200) throw Failure(tr("Téléchargement refusé (code %d)", c.responseCode))

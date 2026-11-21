@@ -15,13 +15,19 @@
 T=${T:-/tmp}
 die() { echo "ERROR: $*"; exit 1; }
 
-[ -f $T/magisk.apk ] || die "$T/magisk.apk missing"
+[ -f $T/magisk.apk ] || [ -d $T/apkx ] || die "$T/magisk.apk missing"
 [ -f $T/boot.img ] || die "$T/boot.img missing (your original boot backup)"
 
 echo "== 1. Magisk: patching the original boot"
 rm -rf $T/magisk
 mkdir -p $T/magisk/apk && cd $T/magisk || die "cannot create $T/magisk"
-unzip -o -q $T/magisk.apk -d apk || echo "note: unzip stopped at the APK signing block (old TWRP busybox), checking the extracted files"
+if [ -d $T/apkx ]; then
+  # Files already extracted on the PC (assets/ and lib/armeabi-v7a/): TWRP's busybox unzip
+  # fails on Magisk's page-aligned APK ("invalid zip magic").
+  cp -r $T/apkx/. apk/ || die "cannot copy $T/apkx"
+else
+  unzip -o -q $T/magisk.apk -d apk || echo "note: unzip stopped at the APK signing block (old TWRP busybox), checking the extracted files"
+fi
 for f in boot_patch.sh util_functions.sh stub.apk; do
   cp apk/assets/$f . || die "$f missing: is this a Magisk APK?"
 done
