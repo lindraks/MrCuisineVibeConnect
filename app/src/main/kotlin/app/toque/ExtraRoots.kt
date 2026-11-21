@@ -18,10 +18,12 @@ import javax.net.ssl.X509TrustManager
  * sur le robot, le téléchargement échouait (« Trust anchor for certification path not found »).
  *
  * assets/certs contient aussi les racines vers lesquelles les sites utilisés basculent ou
- * basculeront, toutes absentes d'Android 6 : ISRG Root X2 (Let's Encrypt, ECDSA), Sectigo
- * Public Server Authentication Root E46 et R46 (GitHub, aujourd'hui encore contre-signées par
- * USERTrust) et GTS Root R1 à R4 (Google). Copiées du magasin de racines de macOS ; une racine
- * de plus = un fichier PEM de plus dans ce dossier.
+ * basculeront, absentes d'Android 6 : ISRG Root X2 (Let's Encrypt, ECDSA), Sectigo Public
+ * Server Authentication Root E46 et R46 (GitHub, aujourd'hui encore contre-signées par
+ * USERTrust), GTS Root R1, R3 et R4 (Google), DigiCert Global Root G2 et G3 et Microsoft RSA
+ * Root 2017. Reprises du fork McSoda/pierok13 ; chaque empreinte SHA-256 a été vérifiée contre
+ * le magasin de racines de Mozilla (certifi 2026.10.18). GTS Root R2, absente de ce magasin,
+ * a été écartée. Une racine de plus = un fichier PEM de plus dans ce dossier.
  *
  * Le système reste consulté en premier ; les racines embarquées ne servent que s'il refuse.
  */
