@@ -102,11 +102,9 @@ class ChooserActivity : Activity() {
         if (event.action == KeyEvent.ACTION_DOWN) {
             val k = event.keyCode
             val p = app.prefs
-            // Mêmes touches par défaut que l'écran principal : flèches, ou clavier mtk-kpd du robot (F6 droite, F7 gauche, F5 appui).
-            val left = p.knobLeft.let { if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_F7 }
-            val right = p.knobRight.let { if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_RIGHT || k == KeyEvent.KEYCODE_F6 }
-            val press = p.knobPress.let { if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER || k == KeyEvent.KEYCODE_F5 }
-            if ((left || right || press) && !p.knobSetupDone) p.knobSetupDone = true
+            val left = p.knobLeft.let { if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_LEFT }
+            val right = p.knobRight.let { if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_RIGHT }
+            val press = p.knobPress.let { if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER }
             when {
                 left -> { select(0); return true }
                 right -> { select(1); return true }
