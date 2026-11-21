@@ -128,17 +128,6 @@ class Prefs(context: Context) {
             p.edit().putString("lastZone", v).commit()
         }
 
-    /**
-     * Au retour de l'appli d'origine, importer sa base de recettes (elle remplace celles du site).
-     * Désactivé par défaut : la synchro avec le site suffit, et basculer d'une appli à l'autre ne
-     * doit pas réduire le catalogue.
-     */
-    var importOnReturn: Boolean
-        get() = p.getBoolean("importOnReturn", false)
-        set(v) {
-            p.edit().putBoolean("importOnReturn", v).commit()
-        }
-
     var autoSync: Boolean
         get() = p.getBoolean("autoSync", true)
         set(v) {
@@ -175,23 +164,6 @@ class Prefs(context: Context) {
         get() = p.getBoolean("bootLaunch", true)
         set(v) {
             p.edit().putBoolean("bootLaunch", v).commit()
-        }
-
-    /** Au démarrage, proposer le choix « appli Lidl » ou « Toque » avant d'ouvrir quoi que ce soit. */
-    var bootChooser: Boolean
-        get() = p.getBoolean("bootChooser", true)
-        set(v) {
-            p.edit().putBoolean("bootChooser", v).commit()
-        }
-
-    /**
-     * Le menu de démarrage attend un choix : le processus machine garde alors le port série libre
-     * (il ne l'ouvre qu'une fois « Toque » choisi, ou laisse l'appli d'origine le prendre).
-     */
-    var chooserPending: Boolean
-        get() = p.getBoolean("chooserPending", false)
-        set(v) {
-            p.edit().putBoolean("chooserPending", v).commit()
         }
 
     var knobLeft: Int

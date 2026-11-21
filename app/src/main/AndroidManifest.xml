@@ -43,16 +43,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Menu de démarrage : « Appli Lidl » ou « Toque ». Lancé par BootReceiver et par les Réglages. -->
-        <activity
-            android:name=".ui.ChooserActivity"
-            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation|screenLayout|smallestScreenSize|locale|layoutDirection|fontScale|uiMode"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:launchMode="singleTask"
-            android:screenOrientation="sensorLandscape"
-            android:stateNotNeeded="true" />
-
         <!-- Pilotage dans un processus séparé : un plantage de l'interface n'arrête pas la cuisson. -->
         <service
             android:name=".machine.MachineService"
@@ -70,10 +60,6 @@
 
         <receiver
             android:name=".recipes.SyncAlarm"
-            android:exported="false" />
-
-        <receiver
-            android:name=".recipes.ChooserAlarm"
             android:exported="false" />
 
         <receiver

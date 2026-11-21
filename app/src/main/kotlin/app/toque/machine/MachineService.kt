@@ -113,8 +113,6 @@ class MachineService : Service() {
             onSnapshot = { s -> main.post { publish(s) } },
             onEvent = { e -> main.post { broadcastEvent(e) } },
             log = { line -> log.write("machine", line) },
-            // Menu de démarrage en attente : on ne touche pas au port série avant le choix.
-            startSuspended = prefs.chooserPending && mode == Prefs.Mode.HARDWARE,
         )
         loop = l
         l.start()

@@ -10,7 +10,6 @@ import android.os.SystemClock
 import app.toque.Prefs
 import app.toque.ToqueApp
 import app.toque.machine.MachineService
-import app.toque.ui.ChooserActivity
 import app.toque.ui.MainActivity
 import java.util.Calendar
 
@@ -45,35 +44,16 @@ class SyncAlarm : BroadcastReceiver() {
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, intent: Intent) {
-        val prefs = Prefs(c)
-        val chooser = prefs.bootLaunch && prefs.bootChooser
-        // Avant de démarrer le processus machine : s'il doit attendre le choix, il le saura.
-        prefs.chooserPending = chooser
         SyncService.schedule(c)
         c.startService(Intent(c, MachineService::class.java))
-        if (prefs.bootLaunch) {
-            // Le robot n'a pas de bouton Accueil : Toque (ou son menu de choix) s'ouvre tout seul au
-            // démarrage, puis repasse devant 20 s plus tard au cas où l'appli d'origine (écran d'accueil)
-            // se serait ouverte après lui.
-            val target = if (chooser) ChooserActivity::class.java else MainActivity::class.java
-            val open = Intent(c, target).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (Prefs(c).bootLaunch) {
+            // Le robot n'a pas de bouton Accueil : Toque s'ouvre tout seul au démarrage, puis repasse
+            // devant 20 s plus tard au cas où l'appli d'origine (écran d'accueil) se serait ouverte après lui.
+            val open = Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             c.startActivity(open)
             val am = c.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val again = if (chooser) {
-                // Le menu ne revient que si le choix n'est pas encore fait.
-                PendingIntent.getBroadcast(c, 2, Intent(c, ChooserAlarm::class.java), PendingIntent.FLAG_UPDATE_CURRENT)
-            } else {
-                PendingIntent.getActivity(c, 1, open, PendingIntent.FLAG_UPDATE_CURRENT)
-            }
-            am.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 20_000, again)
+            am.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 20_000,
+                PendingIntent.getActivity(c, 1, open, PendingIntent.FLAG_UPDATE_CURRENT))
         }
-    }
-}
-
-/** 20 s après le démarrage : ramène le menu de choix devant, sauf si un choix a été fait entre-temps. */
-class ChooserAlarm : BroadcastReceiver() {
-    override fun onReceive(c: Context, intent: Intent) {
-        if (!Prefs(c).chooserPending) return
-        c.startActivity(Intent(c, ChooserActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }

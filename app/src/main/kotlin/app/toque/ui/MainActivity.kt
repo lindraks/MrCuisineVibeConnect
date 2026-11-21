@@ -54,8 +54,6 @@ class MainActivity : Activity() {
     private var lastKnobMs = 0L
     private lateinit var standby: Standby
     private var swallowTouch = false
-    /** Arrivé du menu de démarrage avec « Appli Lidl » : ne pas reprendre le port série. */
-    private var vendorFromChooser = false
     var knobListener: ((KeyEvent) -> Unit)? = null
 
     val prefs: Prefs get() = app.prefs
@@ -103,27 +101,6 @@ class MainActivity : Activity() {
             prefs.knobSetupShown = true
             push(KnobSetupScreen(this))
         }
-        handleIntent(intent)
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleIntent(intent)
-    }
-
-    /** Choix « Appli Lidl » du menu de démarrage : on libère le moteur et on ouvre l'appli d'origine, sans confirmation. */
-    private fun handleIntent(i: Intent?) {
-        if (i?.getBooleanExtra(EXTRA_OPEN_VENDOR, false) != true) return
-        i.removeExtra(EXTRA_OPEN_VENDOR)
-        vendorFromChooser = true
-        whenMachineReady { openVendorApp(skipConfirm = true) }
-    }
-
-    /** Attend que le service machine soit lié (au plus ~10 s) : un ordre envoyé avant serait perdu. */
-    private fun whenMachineReady(tries: Int = 50, block: () -> Unit) {
-        if (machine.connected) block()
-        else if (tries > 0) main.postDelayed({ whenMachineReady(tries - 1, block) }, 200)
     }
 
     /** Applique la langue choisie dans les réglages : l'interface est reconstruite, on revient aux réglages. */
@@ -144,11 +121,6 @@ class MainActivity : Activity() {
         unsubscribeEvents = app.machine.onEvent { e -> onMachineEvent(e) }
         topBar.startClock()
         standby.start()
-        // Toque choisi (ou ouvert autrement) alors que le menu de démarrage retenait le port série : on le reprend.
-        if (prefs.chooserPending && !vendorFromChooser) whenMachineReady {
-            prefs.chooserPending = false
-            machine.resumePort()
-        }
     }
 
     override fun onResume() {
@@ -435,7 +407,7 @@ class MainActivity : Activity() {
 
     // ------------------------------------------------------------------ appli d'origine
 
-    /** Retour depuis l'appli d'origine : on la coupe du moteur, on reprend la main, et on importe si l'option est activée. */
+    /** Retour depuis l'appli d'origine : on la coupe du moteur, on reprend la main, on importe. */
     private fun endVendorSession() {
         prefs.vendorSession = false
         toast(tr("Reprise de la main sur le robot…"))
@@ -444,47 +416,24 @@ class MainActivity : Activity() {
             sync.forceStop()
             sync.setVendorHardware(false)
             main.post { machine.resumePort() }
-            if (prefs.importOnReturn) {
-                val r = sync.importNow()
-                main.post { toast(r.message, if (r.ok) Ui.OK else Ui.WARN) }
-            }
+            val r = sync.importNow()
+            main.post { toast(r.message, if (r.ok) Ui.OK else Ui.WARN) }
         }.start()
     }
 
-    fun openVendorApp(skipConfirm: Boolean = false) {
+    fun openVendorApp() {
         if (snapshot.busy) {
             toast(tr("Arrêtez d'abord le programme en cours"), Ui.WARN)
-            return
-        }
-        if (skipConfirm) {
-            switchToVendor()
             return
         }
         confirm(
             tr("Ouvrir l'appli d'origine"),
             tr("Toque libère le moteur et lance l'appli Monsieur Cuisine d'origine, qui se synchronise avec les serveurs Lidl comme d'habitude.\n\n" +
-                "Revenez ensuite à Toque avec le bouton « Retour à Toque » affiché par-dessus (vous pouvez le déplacer). Les recettes de l'appli d'origine ne sont importées que si l'option des Réglages est activée."),
+                "Revenez ensuite à Toque avec le bouton « Retour à Toque » affiché par-dessus (vous pouvez le déplacer) : les recettes seront importées automatiquement."),
             tr("Ouvrir"), icon = Icon.Kind.SYNC,
         ) {
-            switchToVendor()
-        }
-    }
-
-    /** Libère le moteur, rétablit l'appli d'origine et la lance, avec le bouton « Retour à Toque » par-dessus. */
-    private fun switchToVendor() {
-        run {
             machine.suspendPort { v ->
-                if (!v.ok) {
-                    refusal(v)
-                    // Impossible de libérer le moteur : Toque reprend la main comme d'habitude.
-                    vendorFromChooser = false
-                    if (prefs.chooserPending) {
-                        prefs.chooserPending = false
-                        machine.resumePort()
-                    }
-                    return@suspendPort
-                }
-                prefs.chooserPending = false // le port est libre : le menu de démarrage n'a plus rien à retenir
+                if (!v.ok) { refusal(v); return@suspendPort }
                 Thread {
                     // Sans bouton de retour, impossible de revenir à Toque : on n'ouvre pas.
                     if (!ReturnBubble.ensurePermission(this)) {
@@ -536,9 +485,6 @@ class MainActivity : Activity() {
 
     companion object {
         private var reopenSettings = false
-
-        /** Intention du menu de démarrage : ouvrir l'appli d'origine plutôt que l'accueil de Toque. */
-        const val EXTRA_OPEN_VENDOR = "open_vendor"
 
         /** MotionEvent.AXIS_SCROLL (API 26), valeur fixe pour Android 6. */
         private const val AXIS_SCROLL = 26

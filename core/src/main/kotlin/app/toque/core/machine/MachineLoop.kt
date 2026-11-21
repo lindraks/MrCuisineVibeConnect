@@ -19,8 +19,6 @@ class MachineLoop(
     private val onSnapshot: (Snapshot) -> Unit = {},
     private val onEvent: (MachineEvent) -> Unit = {},
     private val log: (String) -> Unit = {},
-    /** Démarre sans ouvrir la liaison (jusqu'à [resumePort]) : le port reste libre le temps d'un choix. */
-    startSuspended: Boolean = false,
 ) {
     private val exec: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "toque-machine").apply { priority = Thread.MAX_PRIORITY }
@@ -35,7 +33,6 @@ class MachineLoop(
 
     init {
         controller.listener = { e -> onEvent(e) }
-        suspended = startSuspended
     }
 
     fun start() {
