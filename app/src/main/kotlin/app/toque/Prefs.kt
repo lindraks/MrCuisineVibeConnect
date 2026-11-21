@@ -141,6 +141,13 @@ class Prefs(context: Context) {
             p.edit().putBoolean("autoSync", v).commit()
         }
 
+    /** Une seule recette par groupe de doublons (même titre, mêmes ingrédients) dans les listes. */
+    var hideDuplicates: Boolean
+        get() = p.getBoolean("hideDuplicates", true)
+        set(v) {
+            p.edit().putBoolean("hideDuplicates", v).commit()
+        }
+
     var lastSyncMs: Long
         get() = p.getLong("lastSyncMs", 0)
         set(v) {

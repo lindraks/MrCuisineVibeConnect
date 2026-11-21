@@ -9,6 +9,7 @@ import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -147,6 +148,7 @@ class MainActivity : Activity() {
         tone?.release()
         player?.release()
         player = null
+        main.removeCallbacks(timerTick)
         super.onDestroy()
     }
 
@@ -353,6 +355,42 @@ class MainActivity : Activity() {
             app.log.write("son", "son de fin d'étape illisible ($name) : $e")
             false
         }
+    }
+
+    // ------------------------------------------------------------------ minuteur des étapes à la main
+
+    /** Fin du minuteur (horloge de démarrage) ; 0 : aucun minuteur. Il continue quel que soit l'écran. */
+    private var timerEndMs = 0L
+    var timerLabel = ""
+        private set
+    private val timerTick = object : Runnable {
+        override fun run() {
+            if (timerEndMs == 0L) return
+            if (SystemClock.elapsedRealtime() >= timerEndMs) finishTimer() else main.postDelayed(this, 1000)
+        }
+    }
+
+    /** Secondes restantes, 0 sans minuteur. */
+    val timerRemaining: Int
+        get() = if (timerEndMs == 0L) 0 else ((timerEndMs - SystemClock.elapsedRealtime() + 999) / 1000).toInt().coerceAtLeast(0)
+
+    fun startTimer(seconds: Int, label: String) {
+        timerEndMs = SystemClock.elapsedRealtime() + seconds * 1000L
+        timerLabel = label
+        main.removeCallbacks(timerTick)
+        main.postDelayed(timerTick, 1000)
+    }
+
+    fun stopTimer() {
+        timerEndMs = 0L
+        main.removeCallbacks(timerTick)
+    }
+
+    private fun finishTimer() {
+        timerEndMs = 0L
+        standby.poke()
+        if (!playStepSound()) chime(3)
+        toast(tr("Minuteur terminé : %s", timerLabel), Ui.OK)
     }
 
     fun chime(times: Int = 1) {

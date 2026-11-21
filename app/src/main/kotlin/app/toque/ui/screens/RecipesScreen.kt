@@ -53,6 +53,8 @@ class RecipesScreen(
 
     private var filter = RecipeFilter(favoritesOnly = favorites)
     private var usage = initialUsage
+    /** Recherche par ingrédients (« butternut, lardons ») : les recettes qui en ont le plus d'abord. */
+    private var byIngredients = false
     private var query = ""
     private var results: List<SearchIndex.Hit> = emptyList()
     private var generation = 0
@@ -79,7 +81,7 @@ class RecipesScreen(
             setTextSize(TypedValue.COMPLEX_UNIT_PX, Ui.uf(21f))
             setTextColor(Ui.TEXT)
             setHintTextColor(Ui.TEXT3)
-            hint = tr("Recette, ingrédient… (ex. : poulet, curry)")
+            hint = searchHint()
             background = null
             setSingleLine()
             imeOptions = EditorInfo.IME_ACTION_SEARCH or EditorInfo.IME_FLAG_NO_EXTRACT_UI
@@ -151,7 +153,18 @@ class RecipesScreen(
         }
         val base = RecipeFilter()
         val plain = usage == Usage.NONE
-        chip(tr("Toutes"), plain && filter == base, base)
+        chip(tr("Mieux notées"), plain && filter == base, base)
+        chip(tr("A → Z"), plain && filter == base.copy(alphabetical = true), base.copy(alphabetical = true))
+        chips.addView(Ui.toggleChip(c, tr("Par ingrédients"), byIngredients) {
+            byIngredients = !byIngredients
+            input.hint = searchHint()
+            buildChips()
+            search()
+            if (byIngredients) {
+                input.requestFocus()
+                (c.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
+            }
+        }, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
         chip(tr("Récentes"), usage == Usage.RECENT, base, Usage.RECENT)
         chip(tr("Fréquentes"), usage == Usage.MOST, base, Usage.MOST)
         chip(tr("Favoris"), plain && filter.favoritesOnly, base.copy(favoritesOnly = true))
@@ -164,10 +177,14 @@ class RecipesScreen(
         val q = query
         val f = filter
         val u = usage
+        val ingredients = byIngredients || q.contains(',')
         val repo = a.app.recipes
         val index = repo.index
         searchExec.execute {
-            val found = if (q.contains(',')) index.withIngredients(q.split(','), f) else index.search(q, f)
+            val found = when {
+                ingredients && q.isNotBlank() -> index.withIngredients(index.ingredientsOf(q), f)
+                else -> index.search(q, f)
+            }
             val hits = if (u == Usage.NONE) found else {
                 // Ordre des cuissons ; la recherche tapée, s'il y en a une, ne fait que filtrer.
                 val ids = if (u == Usage.RECENT) repo.recentIds() else repo.mostCookedIds()
@@ -198,6 +215,9 @@ class RecipesScreen(
             else -> tr("Aucune recette ne correspond.\nAstuce : séparez plusieurs ingrédients par des virgules.")
         }
     }
+
+    private fun searchHint(): String =
+        if (byIngredients) tr("Vos ingrédients (ex. : butternut, lardons)") else tr("Recette, ingrédient… (ex. : poulet, curry)")
 
     override fun onShow() {
         buildChips()
@@ -245,7 +265,7 @@ class RecipesScreen(
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
             val holder = (convertView?.tag as? Holder) ?: Holder(c)
-            holder.bind(results[position].entry)
+            holder.bind(results[position])
             return holder.root
         }
     }
@@ -278,13 +298,18 @@ class RecipesScreen(
             root.addView(meta, Ui.lp(l = 14, t = 4, r = 12))
         }
 
-        fun bind(e: SearchIndex.Entry) {
+        fun bind(h: SearchIndex.Hit) {
+            val e = h.entry
             title.text = e.title
             val parts = ArrayList<String>()
+            if ((byIngredients || query.contains(',')) && query.isNotBlank() && h.matched > 0) {
+                val wanted = a.app.recipes.index.ingredientsOf(query).size
+                parts += tr("%d/%d ingrédients", h.matched, wanted)
+            }
             val u = a.app.recipes.usage(e.id)
             if (u != null && usage == Usage.MOST) parts += if (u.count == 1) tr("1 fois") else tr("%d fois", u.count)
             if (u != null && usage == Usage.RECENT) parts += ago(u.lastMs)
-            if (e.ratingCount > 0) parts += "★ " + String.format(I18n.locale, "%.1f", e.rating)
+            if (e.ratingCount > 0) parts += "★ " + String.format(I18n.locale, "%.1f", e.rating) + " (${e.ratingCount})"
             if (e.totalMinutes > 0) parts += "${e.totalMinutes} min"
             if (e.category.isNotBlank()) parts += e.category
             meta.text = parts.joinToString(" · ")

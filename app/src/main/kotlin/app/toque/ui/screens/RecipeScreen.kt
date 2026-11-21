@@ -48,6 +48,8 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
      */
     private var scaled: RecipeAdjustments? = null
     private var scaleNote = ""
+    /** Nombre de personnes choisi (celui de la recette sans prorata). */
+    private var servings = recipe.servings
     /** La recette telle qu'elle est affichée et cuisinée : celle de la source + les corrections. */
     private var shown = recipe.adjusted(adjustments)
     /** Carte de pesée ouverte : ingrédient de référence et affichage du poids lu. */
@@ -147,6 +149,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         if (shown.allIngredients.any { it.qty.isNotBlank() } || shown.steps.any { it.weigh != null }) {
             ing.addView(Ui.text(c, tr("Touchez une quantité pour l'adapter : les étapes suivent."), 14f, Ui.TEXT3), Ui.lp(t = 4))
         }
+        if (recipe.servings > 0) ing.addView(servingsRow(), Ui.lp(t = 8))
         if (scaled != null) {
             val box = Ui.vertical(c)
             box.background = Ui.round(Ui.ACCENT_DIM, 16f)
@@ -154,6 +157,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
             box.addView(Ui.text(c, scaleNote, 16f, Ui.TEXT).apply { setLineSpacing(0f, 1.1f) })
             box.addView(Ui.button(c, tr("Revenir aux quantités de la recette"), Ui.Style.GHOST, Icon.Kind.CLOSE, height = 46, textSize = 15f) {
                 scaled = null
+                servings = recipe.servings
                 shown = recipe.adjusted(adjustments)
                 renderIngredients()
                 renderSteps()
@@ -368,6 +372,43 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         return items.indices.filter { Proportions.factor(items[it], 1) != null }
     }
 
+    /** « Personnes  − 4 + » : toutes les quantités suivent, pour cette fois. */
+    private fun servingsRow(): View {
+        val row = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
+        row.addView(Ui.text(c, tr("Personnes"), 18f, Ui.TEXT), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        val max = maxOf(recipe.servings * 3, recipe.servings + 2)
+        row.addView(Ui.button(c, "", Ui.Style.SECONDARY, Icon.Kind.MINUS, height = 48) { setServings(servings - 1) }.apply {
+            alpha = if (servings > 1) 1f else 0.4f
+        })
+        row.addView(Ui.text(c, servings.toString(), 24f, if (servings != recipe.servings) Ui.ACCENT else Ui.TEXT, Ui.MEDIUM).apply {
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(Ui.u(64), Ui.WRAP))
+        row.addView(Ui.button(c, "", Ui.Style.SECONDARY, Icon.Kind.PLUS, height = 48) { setServings(servings + 1) }.apply {
+            alpha = if (servings < max) 1f else 0.4f
+        })
+        return row
+    }
+
+    private fun setServings(n: Int) {
+        val max = maxOf(recipe.servings * 3, recipe.servings + 2)
+        if (n < 1 || n > max || n == servings) return
+        val wasAbove = servings > recipe.servings
+        servings = n
+        if (n == recipe.servings) {
+            scaled = null
+        } else {
+            scaled = Proportions.byFactor(recipe, adjustments, n / recipe.servings.toDouble())
+            scaleNote = tr("Recette pour %d personnes au lieu de %d, pour cette fois.", n, recipe.servings)
+        }
+        shown = recipe.adjusted(currentAdj)
+        renderIngredients()
+        renderSteps()
+        if (n > recipe.servings && !wasAbove) {
+            a.toast(tr("Recette à %d %% : attention à la contenance du bol. Les temps de cuisson ne changent pas.",
+                Math.round(n * 100.0 / recipe.servings).toInt()), Ui.WARN)
+        }
+    }
+
     private fun shortName(i: Ingredient): String =
         QuantityLinks.keyName(i.name).substringBefore(',').trim().ifEmpty { i.name.trim() }
 
@@ -439,6 +480,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         val next = Proportions.scale(recipe, adjustments, k, grams) ?: return closeWeigh()
         val percent = Math.round(f * 100).toInt()
         scaled = next
+        servings = recipe.servings
         scaleNote = tr("Recette à %d %% d'après la balance (%s : %d g), pour cette fois.", percent, shortName(i), grams)
         shown = recipe.adjusted(next)
         closeWeigh()

@@ -17,6 +17,7 @@ import app.toque.core.machine.Snapshot
 import app.toque.core.protocol.Mcc
 import app.toque.core.recipes.Recipe
 import app.toque.core.recipes.StepProgram
+import app.toque.core.recipes.StepTimers
 import app.toque.ui.HoldButton
 import app.toque.ui.Icon
 import app.toque.ui.MainActivity
@@ -66,6 +67,14 @@ class CookScreen(a: MainActivity, private val recipe: Recipe, startStep: Int) : 
     private lateinit var weighLabel: TextView
     private lateinit var weighValue: TextView
     private lateinit var weighBar: ProgressLine
+    /** Minuteur : boutons des durées de l'étape, ou compte à rebours en cours. */
+    private lateinit var timerBox: LinearLayout
+    private val timerTick = object : Runnable {
+        override fun run() {
+            renderTimer()
+            if (a.timerRemaining > 0) view.postDelayed(this, 1000)
+        }
+    }
     private lateinit var panel: LinearLayout
     private lateinit var prevBtn: LinearLayout
     private lateinit var nextBtn: LinearLayout
@@ -98,6 +107,10 @@ class CookScreen(a: MainActivity, private val recipe: Recipe, startStep: Int) : 
         weighBar = ProgressLine(c).apply { color = Ui.COOL }
         weighBox.addView(weighBar, Ui.lp(Ui.MATCH, Ui.u(8), t = 10))
         left.addView(weighBox, Ui.lp(t = 12))
+        timerBox = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
+        timerBox.background = Ui.round(Ui.SURFACE, 22f)
+        timerBox.setPadding(Ui.u(20), Ui.u(10), Ui.u(12), Ui.u(10))
+        left.addView(timerBox, Ui.lp(t = 12))
         body.addView(left, LinearLayout.LayoutParams(0, Ui.MATCH, 1f).apply { rightMargin = Ui.u(22) })
 
         panel = Ui.vertical(c)
@@ -164,6 +177,7 @@ class CookScreen(a: MainActivity, private val recipe: Recipe, startStep: Int) : 
         }
         Ui.setButtonEnabled(prevBtn, index > 0)
         nextLabel.text = if (index == n - 1) tr("Terminer") else tr("Suivant")
+        renderTimer()
         buildPanel()
         onSnapshot(a.snapshot)
     }
@@ -440,6 +454,52 @@ class CookScreen(a: MainActivity, private val recipe: Recipe, startStep: Int) : 
                 }
             }, if (chain) 400L else 1_500L)
         }
+    }
+
+    /**
+     * Étape à la main avec une durée dans son texte (« laisser reposer 10 min ») : un bouton lance
+     * le minuteur. Minuteur en cours : son compte à rebours, sur toutes les étapes.
+     */
+    private fun renderTimer() {
+        if (!::timerBox.isInitialized) return
+        timerBox.removeAllViews()
+        val left = a.timerRemaining
+        if (left > 0) {
+            timerBox.addView(Icon(c, Icon.Kind.TIMER, Ui.ACCENT), LinearLayout.LayoutParams(Ui.u(28), Ui.u(28)).apply { rightMargin = Ui.u(12) })
+            timerBox.addView(Ui.ellipsize(Ui.text(c, a.timerLabel, 19f, Ui.TEXT, Ui.MEDIUM)), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+            timerBox.addView(Ui.text(c, StepTimers.clock(left), 30f, Ui.ACCENT, Ui.LIGHT), Ui.lp(Ui.WRAP, Ui.WRAP, r = 14))
+            timerBox.addView(Ui.button(c, tr("Arrêter"), Ui.Style.GHOST, Icon.Kind.STOP, height = 52) {
+                a.stopTimer()
+                renderTimer()
+            })
+            timerBox.visibility = View.VISIBLE
+            return
+        }
+        val step = recipe.steps.getOrNull(index)
+        val found = if (step == null || step.machine != null) emptyList() else StepTimers.durations(step.text).take(2)
+        if (found.isEmpty()) {
+            timerBox.visibility = View.GONE
+            return
+        }
+        timerBox.addView(Icon(c, Icon.Kind.TIMER, Ui.TEXT2), LinearLayout.LayoutParams(Ui.u(28), Ui.u(28)).apply { rightMargin = Ui.u(12) })
+        timerBox.addView(Ui.text(c, tr("Minuteur"), 19f, Ui.TEXT, Ui.MEDIUM), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        for (sec in found) {
+            timerBox.addView(Ui.button(c, StepTimers.label(sec), Ui.Style.COOL, Icon.Kind.PLAY, height = 52) {
+                a.startTimer(sec, tr("Étape %d · %s", index + 1, StepTimers.label(sec)))
+                view.removeCallbacks(timerTick)
+                view.post(timerTick)
+            }, Ui.lp(Ui.WRAP, Ui.WRAP, l = 10))
+        }
+        timerBox.visibility = View.VISIBLE
+    }
+
+    override fun onShow() {
+        view.removeCallbacks(timerTick)
+        view.post(timerTick)
+    }
+
+    override fun onHide() {
+        view.removeCallbacks(timerTick)
     }
 
     override fun onKnob(delta: Int): Boolean {

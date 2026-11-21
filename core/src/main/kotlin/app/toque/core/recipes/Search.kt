@@ -72,6 +72,8 @@ data class RecipeFilter(
     val favoritesOnly: Boolean = false,
     val source: RecipeSource? = null,
     val maxMinutes: Int = 0,
+    /** Ordre alphabétique (favoris d'abord) au lieu du classement par note. */
+    val alphabetical: Boolean = false,
 )
 
 /**
@@ -108,6 +110,8 @@ class SearchIndex(recipes: List<Recipe>) {
         const val W_TAG = 5
         const val W_INGREDIENT = 4
         const val W_STEP = 1
+        /** Poids de la moyenne du catalogue dans le classement, en nombre d'avis fictifs. */
+        const val PRIOR_VOTES = 20
     }
 
     init {
@@ -131,6 +135,25 @@ class SearchIndex(recipes: List<Recipe>) {
         entries = list
         vocabulary = postings.keys.toTypedArray().also { java.util.Arrays.sort(it) }
     }
+
+    /** Note moyenne du catalogue, pondérée par le nombre d'avis : point de départ du classement. */
+    val meanRating: Double by lazy {
+        var sum = 0.0
+        var n = 0L
+        for (e in entries) if (e.ratingCount > 0) { sum += e.rating * e.ratingCount; n += e.ratingCount }
+        if (n == 0L) 0.0 else sum / n
+    }
+
+    /**
+     * Classement par note et popularité (moyenne bayésienne) : une recette n'approche sa note que
+     * si assez de monde l'a notée. 5 ★ sur 2 avis passe derrière 4,7 ★ sur 900 avis. Une recette
+     * sans avis vient juste sous la moyenne du catalogue.
+     */
+    fun rank(e: Entry): Double =
+        if (e.ratingCount <= 0) meanRating - 0.3
+        else (PRIOR_VOTES * meanRating + e.ratingCount * e.rating) / (PRIOR_VOTES + e.ratingCount)
+
+    private val byRank = compareByDescending<Entry> { rank(it) }.thenByDescending { it.ratingCount }.thenBy { it.normTitle }
 
     val categories: List<String> by lazy {
         entries.map { it.category }.filter { it.isNotBlank() }.distinct().sortedBy { TextNorm.normalize(it) }
@@ -178,9 +201,8 @@ class SearchIndex(recipes: List<Recipe>) {
     fun search(query: String, filter: RecipeFilter = RecipeFilter(), limit: Int = Int.MAX_VALUE): List<Hit> {
         val tokens = TextNorm.tokens(query).distinct()
         if (tokens.isEmpty()) {
-            return entries.filter { accepts(it, filter) }
-                .sortedWith(compareByDescending<Entry> { it.favorite }.thenBy { it.normTitle })
-                .take(limit).map { Hit(it, 0.0, 0) }
+            val order = if (filter.alphabetical) compareByDescending<Entry> { it.favorite }.thenBy { it.normTitle } else byRank
+            return entries.filter { accepts(it, filter) }.sortedWith(order).take(limit).map { Hit(it, 0.0, 0) }
         }
         val perToken = tokens.map { tok ->
             val scores = HashMap<Int, Double>()
@@ -209,12 +231,21 @@ class SearchIndex(recipes: List<Recipe>) {
             if (matched == tokens.size) score += 100.0
             if (e.normTitle.startsWith(normQuery)) score += 20.0 else if (e.normTitle.contains(normQuery)) score += 10.0
             if (e.favorite) score += 1.0
+            // À pertinence voisine, la mieux notée d'abord.
+            score += rank(e)
             hits += Hit(e, score, matched)
         }
         val full = hits.filter { it.matched == tokens.size }
         val result = if (full.isNotEmpty()) full else hits
         return result.sortedWith(compareByDescending<Hit> { it.score }.thenBy { it.entry.normTitle }).take(limit)
     }
+
+    /**
+     * Recherche par ingrédients : « butternut, lardons » ou « butternut et lardons ». Virgules et
+     * « et » séparent les ingrédients ; un ingrédient de plusieurs mots (« pomme de terre ») reste entier.
+     */
+    fun ingredientsOf(query: String): List<String> =
+        query.split(Regex(",|;|\\s+et\\s+|\\s+\\+\\s+", RegexOption.IGNORE_CASE)).map { it.trim() }.filter { it.isNotEmpty() }
 
     /** « Qu'est-ce que je peux faire avec… » : classe par nombre d'ingrédients présents. */
     fun withIngredients(list: List<String>, filter: RecipeFilter = RecipeFilter()): List<Hit> {
@@ -230,8 +261,9 @@ class SearchIndex(recipes: List<Recipe>) {
             }
             for (d in docs) counts[d] = (counts[d] ?: 0) + 1
         }
+        // Le plus d'ingrédients trouvés d'abord, puis la mieux notée.
         return counts.filter { accepts(entries[it.key], filter) }
             .map { Hit(entries[it.key], it.value.toDouble(), it.value) }
-            .sortedWith(compareByDescending<Hit> { it.matched }.thenBy { it.entry.normTitle })
+            .sortedWith(compareByDescending<Hit> { it.matched }.thenByDescending { rank(it.entry) }.thenBy { it.entry.normTitle })
     }
 }

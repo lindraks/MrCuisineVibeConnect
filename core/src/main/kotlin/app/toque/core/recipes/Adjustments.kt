@@ -340,12 +340,19 @@ object Proportions {
      * absentes de la liste (souvent l'eau) suivent aussi.
      */
     fun scale(base: Recipe, current: RecipeAdjustments, ref: Int, grams: Int): RecipeAdjustments? {
-        val shown = base.adjusted(current)
-        val items = shown.allIngredients
-        val r = items.getOrNull(ref) ?: return null
+        val r = base.adjusted(current).allIngredients.getOrNull(ref) ?: return null
         val f = factor(r, grams) ?: return null
+        return apply(base, current, f, ref, grams)
+    }
+
+    /** Toutes les quantités × [factor] (« pour 6 au lieu de 4 » : 1,5). */
+    fun byFactor(base: Recipe, current: RecipeAdjustments, factor: Double): RecipeAdjustments =
+        if (factor <= 0.0 || Math.abs(factor - 1.0) < 1e-9) current else apply(base, current, factor, -1, 0)
+
+    private fun apply(base: Recipe, current: RecipeAdjustments, f: Double, ref: Int, grams: Int): RecipeAdjustments {
+        val shown = base.adjusted(current)
         var out = current
-        for ((k, i) in items.withIndex()) {
+        for ((k, i) in shown.allIngredients.withIndex()) {
             if (i.qty.isBlank()) continue
             val v = (if (k == ref) refQty(i, grams, f) else scaledQty(i, f)) ?: continue
             out = out.withQty(i, v)

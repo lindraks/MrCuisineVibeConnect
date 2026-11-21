@@ -6,6 +6,8 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.os.Handler
 import android.os.Looper
+import app.toque.Prefs
+import app.toque.core.recipes.Duplicates
 import app.toque.core.recipes.Recipe
 import app.toque.core.recipes.RecipeAdjustments
 import app.toque.core.recipes.RecipeCodec
@@ -47,6 +49,9 @@ class RecipeRepo(private val context: Context) {
     @Volatile var index: SearchIndex = SearchIndex(emptyList())
         private set
     @Volatile var loaded = false
+        private set
+    /** Recettes masquées comme doublons à la dernière construction de l'index. */
+    @Volatile var duplicatesHidden = 0
         private set
     private val favorites = HashSet<String>()
     /** Une recette cuisinée [count] fois, la dernière à [lastMs]. */
@@ -93,7 +98,18 @@ class RecipeRepo(private val context: Context) {
         }
         cooked.clear()
         cooked.putAll(usage)
-        index = SearchIndex(list)
+        // Doublons : la copie gardée est celle qui compte pour l'utilisateur (recette en cours,
+        // favori, déjà cuisinée, adaptée), sinon la plus notée. Les autres restent en base.
+        val prefs = Prefs(context)
+        val visible = if (!prefs.hideDuplicates) list else {
+            val guided = prefs.guidedRecipe
+            Duplicates.collapse(list) { r ->
+                (if (r.id == guided) 8 else 0) + (if (r.id in favs) 4 else 0) +
+                    (if (usage.containsKey(r.id)) 2 else 0) + (if (adjustments.containsKey(r.id)) 1 else 0)
+            }
+        }
+        duplicatesHidden = list.size - visible.size
+        index = SearchIndex(visible)
         loaded = true
         notifyChanged()
     }

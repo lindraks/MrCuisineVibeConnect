@@ -95,6 +95,8 @@ class Standby(private val a: MainActivity, private val root: FrameLayout) {
         val minutes = a.prefs.standbyMinutes
         if (minutes <= 0 || asleep || !running) return false
         if (a.snapshot.busy || a.current?.keepAwake == true) return false
+        // Minuteur en cours : le compte à rebours reste à l'écran.
+        if (a.timerRemaining > 0) return false
         return SystemClock.uptimeMillis() - lastInputMs >= minutes * 60_000L
     }
 

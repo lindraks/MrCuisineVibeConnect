@@ -164,6 +164,13 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         lidl.addView(Ui.button(c, tr("Ouvrir l'appli d'origine"), Ui.Style.GHOST, Icon.Kind.LINK, height = 52) { a.openVendorApp() },
             Ui.lp(Ui.WRAP, Ui.WRAP, t = 8))
         lidl.addView(toggle(tr("Synchro automatique chaque nuit"), a.prefs.autoSync) { a.prefs.autoSync = it }, Ui.lp(t = 10))
+        lidl.addView(toggle(tr("Masquer les recettes en double"), a.prefs.hideDuplicates) {
+            a.prefs.hideDuplicates = it
+            a.app.recipes.load()
+        }, Ui.lp(t = 10))
+        val hidden = a.app.recipes.duplicatesHidden
+        lidl.addView(Ui.text(c, tr("Même titre et mêmes ingrédients : une seule est montrée, celle que vous avez en favori ou déjà cuisinée, sinon la plus notée.") +
+            (if (hidden > 0) " " + tr("%d masquées.", hidden) else ""), 15f, Ui.TEXT3).apply { setLineSpacing(0f, 1.1f) }, Ui.lp(t = 6))
 
         // ---- Mises à jour
         val updates = section(left, tr("Mises à jour"), Icon.Kind.INFO)
