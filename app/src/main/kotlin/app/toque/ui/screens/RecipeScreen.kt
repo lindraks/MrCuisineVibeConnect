@@ -17,6 +17,8 @@ import app.toque.core.i18n.tr
 import app.toque.core.machine.Snapshot
 import app.toque.core.recipes.McOnline
 import app.toque.core.recipes.Proportions
+import app.toque.core.recipes.ShoppingList
+import app.toque.HomeAssistant
 import app.toque.core.recipes.QuantityLinks
 import app.toque.core.recipes.Ingredient
 import app.toque.core.recipes.Recipe
@@ -163,10 +165,16 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
                 renderSteps()
             }, Ui.lp(Ui.WRAP, Ui.WRAP, t = 2))
             ing.addView(box, Ui.lp(t = 8))
-        } else if (references().isNotEmpty()) {
-            ing.addView(Ui.button(c, tr("Adapter à la balance"), Ui.Style.SECONDARY, Icon.Kind.SCALE, height = 50, textSize = 16f) { chooseReference() },
-                Ui.lp(Ui.WRAP, Ui.WRAP, t = 8))
         }
+        val tools = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
+        if (scaled == null && references().isNotEmpty()) {
+            tools.addView(Ui.button(c, tr("Adapter à la balance"), Ui.Style.SECONDARY, Icon.Kind.SCALE, height = 50, textSize = 16f) { chooseReference() },
+                Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
+        }
+        if (shown.allIngredients.isNotEmpty()) {
+            tools.addView(Ui.button(c, tr("Liste de courses"), Ui.Style.SECONDARY, Icon.Kind.HOME, height = 50, textSize = 16f) { shoppingList() })
+        }
+        if (tools.childCount > 0) ing.addView(tools, Ui.lp(Ui.WRAP, Ui.WRAP, t = 8))
         for (g in shown.ingredients) {
             if (g.title.isNotBlank()) ing.addView(Ui.text(c, g.title, 17f, Ui.ACCENT, Ui.MEDIUM), Ui.lp(t = 12, b = 2))
             for (i in g.items) {
@@ -370,6 +378,71 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
     private fun references(): List<Int> {
         val items = recipe.adjusted(adjustments).allIngredients
         return items.indices.filter { Proportions.factor(items[it], 1) != null }
+    }
+
+    // ------------------------------------------------------------------ liste de courses
+
+    /**
+     * Les ingrédients tels qu'affichés (nombre de personnes et prorata compris), à cocher avant
+     * l'envoi à Home Assistant : eau, sel et poivre décochés d'office.
+     */
+    private fun shoppingList() {
+        if (!HomeAssistant.configured(a.prefs)) {
+            a.toast(tr("Réglez d'abord l'adresse de Home Assistant dans Réglages."), Ui.WARN)
+            return
+        }
+        val items = ShoppingList.items(shown)
+        if (items.isEmpty()) return
+        val on = items.map { it.checked }.toBooleanArray()
+        val card = Ui.card(c, 28f, Ui.SURFACE2)
+        card.setPadding(Ui.u(32), Ui.u(26), Ui.u(32), Ui.u(22))
+        card.addView(Ui.text(c, tr("Liste de courses"), 24f, Ui.TEXT, Ui.MEDIUM))
+        val who = when {
+            scaled != null && servings == recipe.servings -> scaleNote
+            servings > 0 -> tr("%s · %d personnes", recipe.title, servings)
+            else -> recipe.title
+        }
+        card.addView(Ui.ellipsize(Ui.text(c, who, 16f, Ui.TEXT2)), Ui.lp(t = 4))
+        lateinit var send: LinearLayout
+        val sendLabel = { tr("Envoyer (%d)", on.count { it }) }
+        val list = Ui.vertical(c)
+        for ((k, item) in items.withIndex()) {
+            val row = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
+            row.setPadding(Ui.u(12), Ui.u(8), Ui.u(12), Ui.u(8))
+            val box = Icon(c, Icon.Kind.CHECK, Ui.ACCENT)
+            val label = Ui.text(c, item.text, 18f, Ui.TEXT)
+            fun paint() {
+                row.background = if (on[k]) Ui.round(Ui.SURFACE, 14f) else null
+                box.alpha = if (on[k]) 1f else 0.15f
+                label.setTextColor(if (on[k]) Ui.TEXT else Ui.TEXT3)
+            }
+            row.addView(box, LinearLayout.LayoutParams(Ui.u(26), Ui.u(26)).apply { rightMargin = Ui.u(14) })
+            row.addView(label, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+            row.setOnClickListener {
+                on[k] = !on[k]
+                paint()
+                (send.getChildAt(1) as? TextView)?.text = sendLabel()
+                Ui.setButtonEnabled(send, on.any { it })
+            }
+            paint()
+            list.addView(row, Ui.lp(t = 4))
+        }
+        card.addView(Ui.scroll(c, list), LinearLayout.LayoutParams(Ui.MATCH, Ui.u(minOf(320, 52 * items.size + 8))).apply { topMargin = Ui.u(10) })
+        val row = Ui.horizontal(c, Gravity.END or Gravity.CENTER_VERTICAL)
+        row.addView(Ui.button(c, tr("Annuler"), Ui.Style.GHOST, height = 56, textSize = 17f) { a.closeOverlay() })
+        row.addView(Ui.spacer(c, w = 12))
+        send = Ui.button(c, sendLabel(), Ui.Style.PRIMARY, Icon.Kind.HOME, height = 56, textSize = 17f) {
+            val chosen = items.filterIndexed { k, _ -> on[k] }.map { it.text }
+            if (chosen.isEmpty()) return@button
+            a.closeOverlay()
+            a.toast(tr("Envoi à Home Assistant…"))
+            HomeAssistant.send(a.prefs, ShoppingList.payload(recipe.title, servings, chosen)) { err ->
+                if (err == null) a.toast(tr("%d articles envoyés à Home Assistant.", chosen.size), Ui.OK) else a.toast(err, Ui.WARN)
+            }
+        }
+        row.addView(send)
+        card.addView(row, Ui.lp(t = 14))
+        a.showOverlay(card, 720)
     }
 
     /** « Personnes  − 4 + » : toutes les quantités suivent, pour cette fois. */

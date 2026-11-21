@@ -141,6 +141,19 @@ class Prefs(context: Context) {
             p.edit().putBoolean("autoSync", v).commit()
         }
 
+    /** Home Assistant : adresse (« 192.168.1.20 » ou « http://…:8123 ») et identifiant du webhook des courses. */
+    var haUrl: String
+        get() = p.getString("haUrl", "") ?: ""
+        set(v) {
+            p.edit().putString("haUrl", v).commit()
+        }
+
+    var haWebhook: String
+        get() = p.getString("haWebhook", "toque_courses") ?: "toque_courses"
+        set(v) {
+            p.edit().putString("haWebhook", v).commit()
+        }
+
     /** Une seule recette par groupe de doublons (même titre, mêmes ingrédients) dans les listes. */
     var hideDuplicates: Boolean
         get() = p.getBoolean("hideDuplicates", true)

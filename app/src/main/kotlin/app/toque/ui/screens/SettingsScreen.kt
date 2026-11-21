@@ -16,6 +16,8 @@ import app.toque.Prefs
 import app.toque.TimeSync
 import app.toque.core.i18n.I18n
 import app.toque.core.i18n.tr
+import app.toque.core.recipes.ShoppingList
+import app.toque.HomeAssistant
 import app.toque.core.machine.RootShell
 import app.toque.core.machine.Snapshot
 import app.toque.core.time.ZoneLookup
@@ -34,6 +36,8 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
     private lateinit var modeRow: LinearLayout
     private lateinit var twinBox: LinearLayout
     private lateinit var host: EditText
+    private lateinit var haUrl: EditText
+    private lateinit var haHook: EditText
     private lateinit var port: EditText
     private lateinit var syncText: TextView
     private lateinit var bowlText: TextView
@@ -180,6 +184,22 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         updates.addView(updButtons, Ui.lp(t = 12))
         Updater.onInstallError = { msg -> updateFailed(msg) }
         renderUpdate()
+
+        // ---- Home Assistant
+        val ha = section(left, tr("Home Assistant"), Icon.Kind.HOME)
+        ha.addView(Ui.text(c, tr("Le bouton « Liste de courses » d'une recette envoie ses ingrédients à ce webhook de Home Assistant."),
+            15f, Ui.TEXT3).apply { setLineSpacing(0f, 1.1f) })
+        haUrl = field(a.prefs.haUrl, tr("Adresse (ex. : 192.168.1.20)"))
+        ha.addView(haUrl, Ui.lp(Ui.MATCH, Ui.u(58), t = 10))
+        haHook = field(a.prefs.haWebhook, tr("Identifiant du webhook"))
+        ha.addView(haHook, Ui.lp(Ui.MATCH, Ui.u(58), t = 8))
+        ha.addView(Ui.button(c, tr("Enregistrer et tester"), Ui.Style.SECONDARY, Icon.Kind.CHECK, height = 52) {
+            saveHa()
+            a.toast(tr("Envoi à Home Assistant…"))
+            HomeAssistant.send(a.prefs, ShoppingList.payload(tr("Test Toque"), 0, listOf(tr("Test Toque")))) { err ->
+                if (err == null) a.toast(tr("Envoyé : « Test Toque » doit apparaître dans votre liste."), Ui.OK) else a.toast(err, Ui.WARN)
+            }
+        }, Ui.lp(Ui.WRAP, Ui.WRAP, t = 10))
 
         // ---- Outils
         val tools = section(right, tr("Outils"), Icon.Kind.SETTINGS)
@@ -533,7 +553,14 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         unsubRecipes = a.app.recipes.onChange { if (!syncing) refreshSync() }
     }
 
+    private fun saveHa() {
+        if (!::haUrl.isInitialized) return
+        a.prefs.haUrl = haUrl.text.toString().trim()
+        a.prefs.haWebhook = haHook.text.toString().trim().ifEmpty { "toque_courses" }
+    }
+
     override fun onHide() {
+        saveHa()
         unsubRecipes?.invoke()
         unsubRecipes = null
     }
