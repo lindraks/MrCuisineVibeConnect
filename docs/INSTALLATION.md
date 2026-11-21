@@ -83,8 +83,8 @@ Only do this on your home network: anyone on it could then connect to the robot.
 
 ## 3. Install Toque
 
-1. Download the latest `MCC-285-Toque-X.Y.Z.apk` from the
-   [Releases page](https://github.com/McSoda/MrCuisineVibeConnect/releases), or build it in
+1. Download the latest `Toque-X.Y.Z.apk` from the
+   [Releases page](https://github.com/lindraks/MrCuisineVibeConnect/releases), or build it in
    Android Studio (see the README). With a downloaded APK, add `-Apk <path to the APK>` below.
 2. `powershell -ExecutionPolicy Bypass -File tools\install-robot.ps1`
    (over Wi-Fi: add `-Ip <robot IP address>`).

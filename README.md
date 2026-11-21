@@ -2,12 +2,10 @@
 
 🇫🇷 **[Version française](README.fr.md)**
 
-> **This fork** (McSoda/MrCuisineVibeConnect) builds on the original project by Wuki60
-> (https://github.com/Wuki60/MrCuisineVibeConnect). Its APKs are named
-> **`MCC-285-Toque-X.Y.Z.apk`**: they were tried on a robot whose stock app is **build 285**
-> (firmware 4922), while the protocol Toque follows comes from build 292. Until compatibility with
-> build 292 is confirmed, the name tells them apart from the original project's APK. Toque's
-> updates come from this fork's releases.
+> **This fork** (lindraks/MrCuisineVibeConnect) builds on the original project by Wuki60
+> (https://github.com/Wuki60/MrCuisineVibeConnect) and on the McSoda and pierok13 forks. It adds
+> community recipes and the Smart recipes the Connect can run, a custom end-of-step sound and a few
+> comfort settings. Toque's updates come from this fork's releases (`Toque-X.Y.Z.apk`).
 
 **Toque** is a fast, modern replacement interface for the Lidl **Monsieur Cuisine Connect**
 kitchen robot (SKMC 1200). It runs on the robot's own tablet instead of the stock app and still
@@ -27,7 +25,7 @@ The easiest way: let an AI agent that can operate your Windows PC (Claude, ChatG
 the install. Give it this message:
 
 > Install Toque on my Monsieur Cuisine Connect by following AGENTS.md in
-> https://github.com/McSoda/MrCuisineVibeConnect
+> https://github.com/lindraks/MrCuisineVibeConnect
 
 [AGENTS.md](AGENTS.md) describes the whole procedure to the agent, and
 [`tools/setup/toque-setup.ps1`](tools/setup/toque-setup.ps1) does the work step by step (verified
@@ -86,7 +84,7 @@ Allow 1 to 2 hours. Without an agent: [docs/INSTALLATION.md](docs/INSTALLATION.m
 - **Made for a robot without Android buttons**: Toque opens at startup, and a **Back to Toque**
   button stays on top of the stock app when you open it.
 - **Updates from GitHub**: *Settings › Updates* checks this repository's
-  [Releases](https://github.com/McSoda/MrCuisineVibeConnect/releases) and installs the new version
+  [Releases](https://github.com/lindraks/MrCuisineVibeConnect/releases) and installs the new version
   (silently on a rooted robot, then Toque restarts). Refused while a program is running. Recent
   root certificates missing from Android 6 (ISRG Root X1/X2 for GitHub's download server, Sectigo,
   Google) are bundled, so downloads over HTTPS work on the robot.
