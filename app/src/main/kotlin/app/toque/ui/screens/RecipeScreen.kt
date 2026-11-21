@@ -391,43 +391,93 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
             a.toast(tr("Réglez d'abord l'adresse de Home Assistant dans Réglages."), Ui.WARN)
             return
         }
-        val items = ShoppingList.items(shown)
+        var items = ShoppingList.items(shown)
         if (items.isEmpty()) return
+        // Cases cochées : gardées quand le nombre de personnes change (seules les quantités bougent).
         val on = items.map { it.checked }.toBooleanArray()
         val card = Ui.card(c, 28f, Ui.SURFACE2)
         card.setPadding(Ui.u(32), Ui.u(26), Ui.u(32), Ui.u(22))
-        card.addView(Ui.text(c, tr("Liste de courses"), 24f, Ui.TEXT, Ui.MEDIUM))
-        val who = when {
-            scaled != null && servings == recipe.servings -> scaleNote
-            servings > 0 -> tr("%s · %d personnes", recipe.title, servings)
-            else -> recipe.title
-        }
-        card.addView(Ui.ellipsize(Ui.text(c, who, 16f, Ui.TEXT2)), Ui.lp(t = 4))
+        val head = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
+        val titles = Ui.vertical(c)
+        titles.addView(Ui.text(c, tr("Liste de courses"), 24f, Ui.TEXT, Ui.MEDIUM))
+        val who = Ui.ellipsize(Ui.text(c, "", 16f, Ui.TEXT2))
+        titles.addView(who, Ui.lp(t = 4))
+        head.addView(titles, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        card.addView(head)
+
         lateinit var send: LinearLayout
-        val sendLabel = { tr("Envoyer (%d)", on.count { it }) }
         val list = Ui.vertical(c)
-        for ((k, item) in items.withIndex()) {
-            val row = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
-            row.setPadding(Ui.u(12), Ui.u(8), Ui.u(12), Ui.u(8))
-            val box = Icon(c, Icon.Kind.CHECK, Ui.ACCENT)
-            val label = Ui.text(c, item.text, 18f, Ui.TEXT)
-            fun paint() {
-                row.background = if (on[k]) Ui.round(Ui.SURFACE, 14f) else null
-                box.alpha = if (on[k]) 1f else 0.15f
-                label.setTextColor(if (on[k]) Ui.TEXT else Ui.TEXT3)
-            }
-            row.addView(box, LinearLayout.LayoutParams(Ui.u(26), Ui.u(26)).apply { rightMargin = Ui.u(14) })
-            row.addView(label, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
-            row.setOnClickListener {
-                on[k] = !on[k]
-                paint()
-                (send.getChildAt(1) as? TextView)?.text = sendLabel()
-                Ui.setButtonEnabled(send, on.any { it })
-            }
-            paint()
-            list.addView(row, Ui.lp(t = 4))
+        val scroller = Ui.scroll(c, list)
+        fun sendLabel() = tr("Envoyer (%d)", on.count { it })
+        fun refreshSend() {
+            (send.getChildAt(1) as? TextView)?.text = sendLabel()
+            Ui.setButtonEnabled(send, on.any { it })
         }
-        card.addView(Ui.scroll(c, list), LinearLayout.LayoutParams(Ui.MATCH, Ui.u(minOf(320, 52 * items.size + 8))).apply { topMargin = Ui.u(10) })
+        fun fill() {
+            who.text = when {
+                scaled != null && servings == recipe.servings -> scaleNote
+                servings > 0 -> tr("%s · %d personnes", recipe.title, servings)
+                else -> recipe.title
+            }
+            list.removeAllViews()
+            for ((k, item) in items.withIndex()) {
+                val row = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
+                row.setPadding(Ui.u(12), Ui.u(8), Ui.u(12), Ui.u(8))
+                val box = Icon(c, Icon.Kind.CHECK, Ui.ACCENT)
+                val label = Ui.text(c, item.text, 18f, Ui.TEXT)
+                fun paint() {
+                    row.background = if (on[k]) Ui.round(Ui.SURFACE, 14f) else null
+                    box.alpha = if (on[k]) 1f else 0.15f
+                    label.setTextColor(if (on[k]) Ui.TEXT else Ui.TEXT3)
+                }
+                row.addView(box, LinearLayout.LayoutParams(Ui.u(26), Ui.u(26)).apply { rightMargin = Ui.u(14) })
+                row.addView(label, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+                row.setOnClickListener {
+                    on[k] = !on[k]
+                    paint()
+                    refreshSend()
+                }
+                paint()
+                list.addView(row, Ui.lp(t = 4))
+            }
+        }
+
+        // Nombre de personnes, modifiable ici : la liste et la page de la recette suivent.
+        if (recipe.servings > 0) {
+            val max = maxOf(recipe.servings * 3, recipe.servings + 2)
+            val minus = Ui.button(c, "", Ui.Style.SECONDARY, Icon.Kind.MINUS, height = 48) {}
+            val plus = Ui.button(c, "", Ui.Style.SECONDARY, Icon.Kind.PLUS, height = 48) {}
+            val value = Ui.text(c, "", 24f, Ui.TEXT, Ui.MEDIUM).apply { gravity = Gravity.CENTER }
+            fun paintCount() {
+                value.text = servings.toString()
+                value.setTextColor(if (servings != recipe.servings) Ui.ACCENT else Ui.TEXT)
+                minus.alpha = if (servings > 1) 1f else 0.4f
+                plus.alpha = if (servings < max) 1f else 0.4f
+            }
+            fun change(n: Int) {
+                if (n < 1 || n > max || n == servings) return
+                setServings(n)
+                val next = ShoppingList.items(shown)
+                if (next.size != items.size) {
+                    // Liste différente (ne devrait pas arriver) : on repart des cases par défaut.
+                    for (k in on.indices) on[k] = next.getOrNull(k)?.checked ?: false
+                }
+                items = next
+                paintCount()
+                fill()
+                refreshSend()
+            }
+            minus.setOnClickListener { change(servings - 1) }
+            plus.setOnClickListener { change(servings + 1) }
+            head.addView(Ui.text(c, tr("Personnes"), 17f, Ui.TEXT2), Ui.lp(Ui.WRAP, Ui.WRAP, r = 12))
+            head.addView(minus)
+            head.addView(value, LinearLayout.LayoutParams(Ui.u(56), Ui.WRAP))
+            head.addView(plus)
+            paintCount()
+        }
+
+        fill()
+        card.addView(scroller, LinearLayout.LayoutParams(Ui.MATCH, Ui.u(minOf(300, 52 * items.size + 8))).apply { topMargin = Ui.u(10) })
         val row = Ui.horizontal(c, Gravity.END or Gravity.CENTER_VERTICAL)
         row.addView(Ui.button(c, tr("Annuler"), Ui.Style.GHOST, height = 56, textSize = 17f) { a.closeOverlay() })
         row.addView(Ui.spacer(c, w = 12))
@@ -442,7 +492,8 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         }
         row.addView(send)
         card.addView(row, Ui.lp(t = 14))
-        a.showOverlay(card, 720)
+        refreshSend()
+        a.showOverlay(card, 760)
     }
 
     /** « Personnes  − 4 + » : toutes les quantités suivent, pour cette fois. */
