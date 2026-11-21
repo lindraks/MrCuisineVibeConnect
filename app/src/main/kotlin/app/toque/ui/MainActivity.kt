@@ -349,13 +349,21 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Son de fin d'étape personnalisé : un fichier « fin-etape.* » (m4a, mp3, ogg, wav) déposé par adb dans
-     * /sdcard/Android/data/app.toque/files/sons/. Absent ou illisible : le double bip habituel.
+     * Son de fin d'étape : d'abord un fichier « fin-etape.* » (m4a, mp3, ogg, wav) déposé par adb dans
+     * /sdcard/Android/data/app.toque/files/sons/, sinon le son intégré (assets/sons/fin-etape.m4a).
+     * Aucun des deux lisible : le double bip habituel.
      */
     private fun playStepSound(): Boolean {
         if (!prefs.sound) return false
         val dir: File? = try { getExternalFilesDir("sons") } catch (_: Exception) { null }
-        val f = dir?.listFiles()?.filter { it.isFile && it.name.startsWith("fin-etape.") }?.minByOrNull { it.name } ?: return false
+        val custom = dir?.listFiles()?.filter { it.isFile && it.name.startsWith("fin-etape.") }?.minByOrNull { it.name }
+        if (custom != null && play(custom.name) { it.setDataSource(custom.absolutePath) }) return true
+        return play(STEP_SOUND_ASSET) { mp ->
+            assets.openFd(STEP_SOUND_ASSET).use { fd -> mp.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length) }
+        }
+    }
+
+    private fun play(name: String, source: (MediaPlayer) -> Unit): Boolean {
         player?.release()
         player = null
         return try {
@@ -365,7 +373,7 @@ class MainActivity : Activity() {
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build())
-            mp.setDataSource(f.absolutePath)
+            source(mp)
             mp.setOnCompletionListener { done ->
                 done.release()
                 if (player === done) player = null
@@ -376,7 +384,7 @@ class MainActivity : Activity() {
         } catch (e: Exception) {
             player?.release()
             player = null
-            app.log.write("son", "son de fin d'étape illisible (${f.name}) : $e")
+            app.log.write("son", "son de fin d'étape illisible ($name) : $e")
             false
         }
     }
@@ -574,6 +582,8 @@ class MainActivity : Activity() {
         /** LED du bouton rotatif : trois canaux du noyau (0 à 255). */
         private const val LED_DIR = "/sys/class/leds"
         private const val LED_COLORS = "red green blue"
+        /** Son de fin d'étape intégré à l'appli. */
+        private const val STEP_SOUND_ASSET = "sons/fin-etape.m4a"
 
         /** MotionEvent.AXIS_SCROLL (API 26), valeur fixe pour Android 6. */
         private const val AXIS_SCROLL = 26
