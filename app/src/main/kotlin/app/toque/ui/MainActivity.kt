@@ -32,7 +32,9 @@ import app.toque.core.machine.Snapshot
 import app.toque.core.machine.Verdict
 import app.toque.recipes.LidlSync
 import app.toque.recipes.SyncService
+import app.toque.ui.screens.CookScreen
 import app.toque.ui.screens.HomeScreen
+import app.toque.ui.screens.RecipeScreen
 import app.toque.ui.screens.KnobSetupScreen
 import app.toque.ui.screens.SettingsScreen
 import java.io.File
@@ -126,6 +128,26 @@ class MainActivity : Activity() {
         unsubscribeEvents = app.machine.onEvent { e -> onMachineEvent(e) }
         topBar.startClock()
         standby.start()
+        unsubscribeHome = app.home.onChange { openSent() }
+        openSent()
+    }
+
+    private var unsubscribeHome: (() -> Unit)? = null
+
+    /**
+     * Recette envoyée depuis le téléphone : ouverte ici, prête à lancer (rien ne démarre tout seul).
+     * Pendant une cuisson, elle attend la fin (elle est relue toutes les 20 s).
+     */
+    private fun openSent() {
+        val s = app.home.sent ?: return
+        if (s.at <= prefs.lastSentAt) return
+        if (snapshot.busy || current is CookScreen) return
+        prefs.lastSentAt = s.at
+        app.home.ackSent(s.at)
+        val r = app.recipes.get(s.id) ?: return
+        standby.poke()
+        push(RecipeScreen(this, r, initialServings = s.servings))
+        toast(tr("Recette envoyée depuis le téléphone"), Ui.OK)
     }
 
     override fun onResume() {
@@ -139,6 +161,8 @@ class MainActivity : Activity() {
     override fun onStop() {
         unsubscribe?.invoke()
         unsubscribeEvents?.invoke()
+        unsubscribeHome?.invoke()
+        unsubscribeHome = null
         topBar.stopClock()
         standby.stop()
         super.onStop()

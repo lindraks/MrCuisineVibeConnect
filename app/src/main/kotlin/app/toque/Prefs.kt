@@ -168,6 +168,13 @@ class Prefs(context: Context) {
             p.edit().putBoolean("homeMerged", v).commit()
         }
 
+    /** Heure (ms) de la dernière recette envoyée du téléphone déjà ouverte : jamais ouverte deux fois. */
+    var lastSentAt: Long
+        get() = p.getLong("lastSentAt", 0)
+        set(v) {
+            p.edit().putLong("lastSentAt", v).commit()
+        }
+
     /** Version du catalogue du serveur maison déjà téléchargée. */
     var homeCatalog: String
         get() = p.getString("homeCatalog", "") ?: ""

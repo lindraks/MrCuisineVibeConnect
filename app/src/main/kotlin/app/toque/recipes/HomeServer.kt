@@ -85,6 +85,10 @@ class HomeLink(private val prefs: Prefs, private val repo: RecipeRepo, private v
         private set
     @Volatile var reachable = false
         private set
+    /** Recette envoyée depuis le téléphone, pas encore ouverte ([at] : heure de l'envoi, ms). */
+    data class Sent(val id: String, val servings: Int, val at: Long)
+    @Volatile var sent: Sent? = null
+        private set
     private val thread = HandlerThread("toque-maison").apply { start() }
     private val worker = Handler(thread.looper)
     private val main = Handler(Looper.getMainLooper())
@@ -136,6 +140,18 @@ class HomeLink(private val prefs: Prefs, private val repo: RecipeRepo, private v
         worker.post {
             synchronized(pendingPlan) { pendingPlan[id] = servings }
             flush()
+        }
+    }
+
+    /** La recette envoyée a été ouverte sur le robot : le serveur l'oublie. */
+    fun ackSent(at: Long) {
+        sent = null
+        worker.post {
+            try {
+                HomeServer.call(prefs, "DELETE", "/api/envoyer?at=$at")
+            } catch (e: Exception) {
+                log.write("maison", "envoi non acquitté : ${e.message}")
+            }
         }
     }
 
@@ -204,7 +220,13 @@ class HomeLink(private val prefs: Prefs, private val repo: RecipeRepo, private v
             // Un changement local pas encore parti l'emporte sur l'état relu.
             synchronized(pendingFav) { for ((id, f) in pendingFav) if (f) favs += id else favs -= id }
             repo.replaceFavorites(favs)
-            val changed = plan != planned || !reachable
+            val sentNow = state["envoi"]?.obj()?.let { e ->
+                val id = e.str("id") ?: return@let null
+                Sent(id, e.int("portions") ?: 0, (e["at"] as? Number)?.toLong() ?: 0L)
+            }
+            // Une recette envoyée en attente (cuisson en cours) est reproposée à chaque relecture.
+            val changed = plan != planned || !reachable || sentNow != sent || sentNow != null
+            sent = sentNow
             planned = plan
             reachable = true
             if (changed) notifyChanged()
@@ -223,6 +245,7 @@ class HomeLink(private val prefs: Prefs, private val repo: RecipeRepo, private v
     @Volatile var onNewCatalog: (() -> Unit)? = null
 
     companion object {
-        const val PERIOD_MS = 60_000L
+        /** Relecture : assez souvent pour qu'une recette envoyée du téléphone s'ouvre vite. */
+        const val PERIOD_MS = 20_000L
     }
 }
