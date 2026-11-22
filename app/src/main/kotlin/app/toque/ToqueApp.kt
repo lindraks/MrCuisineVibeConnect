@@ -25,6 +25,7 @@ class ToqueApp : Application() {
     val recipes: RecipeRepo by lazy { RecipeRepo(this) }
     /** Favoris et « À cuisiner » partagés avec le serveur maison (et le téléphone). */
     val home: HomeLink by lazy { HomeLink(prefs, recipes, log) }
+    @Volatile private var lastAutoSyncMs = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -60,7 +61,14 @@ class ToqueApp : Application() {
         log.write("interface", "démarrage")
         TimeSync.start(this, prefs, log)
         // Nouveau catalogue annoncé par le serveur maison : téléchargé en arrière-plan.
-        home.onNewCatalog = { Thread { HomeSync(prefs, recipes, log).sync() }.start() }
+        // Après un échec, nouvel essai au plus tôt 10 min plus tard (pas de synchro en boucle).
+        home.onNewCatalog = {
+            val now = System.currentTimeMillis()
+            if (now - lastAutoSyncMs > 10 * 60_000L) {
+                lastAutoSyncMs = now
+                Thread { HomeSync(prefs, recipes, log).sync() }.start()
+            }
+        }
         home.start()
     }
 

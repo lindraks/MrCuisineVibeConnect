@@ -33,8 +33,10 @@ class HomeSync(private val prefs: Prefs, private val repo: RecipeRepo, private v
         if (!running.compareAndSet(false, true)) return LidlSync.Report(false, tr("Synchronisation déjà en cours"))
         try {
             return finish(run(progress))
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Erreur de mémoire comprise : la synchro échoue proprement au lieu de faire redémarrer l'appli.
             log.crash("synchro maison", e)
+            if (e is OutOfMemoryError) System.gc()
             return finish(LidlSync.Report(false, tr("Synchronisation impossible : %s", e.message ?: e.toString())))
         } finally {
             running.set(false)
@@ -173,6 +175,11 @@ class HomeSync(private val prefs: Prefs, private val repo: RecipeRepo, private v
         prefs.lastSyncMs = System.currentTimeMillis()
         prefs.lastSyncResult = "$stamp : ${r.message}"
         log.write("synchro maison", r.message)
+        // Résultat aussi noté par le serveur maison (diagnostic à distance, sans écran).
+        try {
+            HomeServer.call(prefs, "POST", "/api/robot/rapport", Json.write(mapOf("ok" to r.ok, "message" to r.message, "recettes" to r.recipes)))
+        } catch (_: Exception) {
+        }
         return r
     }
 
