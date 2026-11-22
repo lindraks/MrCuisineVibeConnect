@@ -40,6 +40,8 @@ class CookScreen(a: MainActivity, private val recipe: Recipe, startStep: Int) : 
         val known = a.prefs.reviewedSteps
         recipe.steps.forEachIndexed { i, st -> if (st.needsReview && reviewKey(i) in known) add(i) }
     }
+    /** Dernière étape de pesée remise à zéro automatiquement. */
+    private var taredStep = -1
     /** Bip de pesée : armé tant que le poids est sous la quantité, joué une fois en l'atteignant. */
     private var weighArmed = false
     /** Cuisson déjà comptée (« Récentes », « Les plus cuisinées ») pendant cet écran. */
@@ -174,6 +176,11 @@ class CookScreen(a: MainActivity, private val recipe: Recipe, startStep: Int) : 
         text.text = if (step.text.isBlank()) step.machine?.summary ?: "" else stepText(step, recipe)
         val w = step.weigh
         weighBox.visibility = if (w != null) View.VISIBLE else View.GONE
+        // Étape de pesée : balance remise à zéro en arrivant (une fois par étape, jamais moteur en marche).
+        if (w != null && taredStep != index && !a.snapshot.busy) {
+            taredStep = index
+            a.machine.tare()
+        }
         if (w != null) {
             weighLabel.text = (if (w.originalGrams > 0) tr("Pesez %d g (recette : %d g)", w.grams, w.originalGrams) else tr("Pesez %d g", w.grams)) +
                 if (w.label.isNotBlank()) " · ${w.label}" else ""

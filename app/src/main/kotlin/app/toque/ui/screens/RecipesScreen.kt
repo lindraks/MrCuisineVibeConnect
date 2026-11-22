@@ -15,7 +15,6 @@ import android.widget.BaseAdapter
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.GridView
-import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -24,7 +23,6 @@ import app.toque.core.i18n.I18n
 import app.toque.core.i18n.tr
 import app.toque.core.recipes.RecipeFilter
 import app.toque.core.recipes.SearchIndex
-import app.toque.recipes.HomeServer
 import app.toque.ui.Icon
 import app.toque.ui.ImageLoader
 import app.toque.ui.MainActivity
@@ -59,12 +57,12 @@ class RecipesScreen(
     private var filter = RecipeFilter(favoritesOnly = favorites, category = category)
     private var usage = initialUsage
     /** Recherche par ingrédients (« butternut, lardons ») : les recettes qui en ont le plus d'abord. */
-    private var byIngredients = false
     private var query = ""
     private var results: List<SearchIndex.Hit> = emptyList()
     private var generation = 0
     private lateinit var input: EditText
-    private lateinit var chips: LinearLayout
+    /** Tri à droite de la recherche : « ★ Note » / « A → Z » (listes ordinaires seulement). */
+    private lateinit var sortBox: LinearLayout
     private lateinit var grid: GridView
     private lateinit var count: TextView
     private lateinit var empty: LinearLayout
@@ -80,11 +78,11 @@ class RecipesScreen(
 
         val bar = Ui.horizontal(c)
         val field = Ui.horizontal(c)
-        field.setPadding(Ui.u(20), 0, Ui.u(10), 0)
-        field.background = Ui.round(Ui.SURFACE, 32f, Ui.STROKE, 1f)
-        field.addView(Icon(c, Icon.Kind.SEARCH, Ui.TEXT2), LinearLayout.LayoutParams(Ui.u(26), Ui.u(26)).apply { rightMargin = Ui.u(12) })
+        field.setPadding(Ui.u(18), 0, Ui.u(8), 0)
+        field.background = Ui.round(Ui.SURFACE, 26f, Ui.STROKE, 1f)
+        field.addView(Icon(c, Icon.Kind.SEARCH, Ui.TEXT2), LinearLayout.LayoutParams(Ui.u(22), Ui.u(22)).apply { rightMargin = Ui.u(10) })
         input = EditText(c).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_PX, Ui.uf(21f))
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, Ui.uf(19f))
             setTextColor(Ui.TEXT)
             setHintTextColor(Ui.TEXT3)
             hint = searchHint()
@@ -107,16 +105,17 @@ class RecipesScreen(
         val clear = Icon(c, Icon.Kind.CLOSE, Ui.TEXT2)
         clear.setPadding(Ui.u(10), Ui.u(10), Ui.u(10), Ui.u(10))
         clear.setOnClickListener { input.setText("") }
-        field.addView(clear, LinearLayout.LayoutParams(Ui.u(48), Ui.u(48)))
-        bar.addView(field, LinearLayout.LayoutParams(0, Ui.u(64), 1f))
-        count = Ui.text(c, "", 17f, Ui.TEXT2)
-        bar.addView(count, Ui.lp(Ui.WRAP, Ui.WRAP, l = 18))
+        field.addView(clear, LinearLayout.LayoutParams(Ui.u(44), Ui.u(44)))
+        // Recherche 20 % plus basse qu'avant (64 → 51) et plus de bandeau de puces : place pour les recettes.
+        bar.addView(field, LinearLayout.LayoutParams(0, Ui.u(51), 1f))
+        count = Ui.text(c, "", 16f, Ui.TEXT2)
+        bar.addView(count, Ui.lp(Ui.WRAP, Ui.WRAP, l = 14))
+        sortBox = Ui.horizontal(c)
+        sortBox.background = Ui.round(Ui.SURFACE, 26f, Ui.STROKE, 1f)
+        sortBox.setPadding(Ui.u(4), Ui.u(4), Ui.u(4), Ui.u(4))
+        bar.addView(sortBox, Ui.lp(Ui.WRAP, Ui.WRAP, l = 14))
         root.addView(bar)
-
-        val scroller = HorizontalScrollView(c).apply { isHorizontalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER }
-        chips = Ui.horizontal(c)
-        scroller.addView(chips)
-        root.addView(scroller, Ui.lp(t = 12, b = 12))
+        root.addView(View(c), Ui.lp(Ui.MATCH, Ui.u(12)))
 
         val body = FrameLayout(c)
         grid = GridView(c).apply {
@@ -153,32 +152,20 @@ class RecipesScreen(
     }
 
     private fun buildChips() {
-        chips.removeAllViews()
-        fun chip(label: String, selected: Boolean, f: RecipeFilter, u: Usage = Usage.NONE) {
-            chips.addView(Ui.toggleChip(c, label, selected) { filter = f; usage = u; buildChips(); search() }, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
+        sortBox.removeAllViews()
+        // Ordre imposé (récentes, fréquentes, à cuisiner) : pas de tri à choisir.
+        sortBox.visibility = if (usage == Usage.NONE) View.VISIBLE else View.GONE
+        fun option(label: String, alphabetical: Boolean) {
+            val selected = filter.alphabetical == alphabetical
+            val t = Ui.text(c, label, 16f, if (selected) 0xFF1A0E05.toInt() else Ui.TEXT2, Ui.MEDIUM)
+            t.gravity = android.view.Gravity.CENTER
+            t.setPadding(Ui.u(16), 0, Ui.u(16), 0)
+            t.background = if (selected) Ui.round(Ui.ACCENT, 22f) else null
+            t.setOnClickListener { filter = filter.copy(alphabetical = alphabetical); buildChips(); search() }
+            sortBox.addView(t, LinearLayout.LayoutParams(Ui.WRAP, Ui.u(41)))
         }
-        val base = RecipeFilter(category = category)
-        val plain = usage == Usage.NONE
-        val home = HomeServer.configured(a.prefs)
-        if (home) chip(tr("À cuisiner"), usage == Usage.PLANNED, base, Usage.PLANNED)
-        chip(tr("Mieux notées"), plain && filter == base, base)
-        chip(tr("A → Z"), plain && filter == base.copy(alphabetical = true), base.copy(alphabetical = true))
-        chips.addView(Ui.toggleChip(c, tr("Par ingrédients"), byIngredients) {
-            byIngredients = !byIngredients
-            input.hint = searchHint()
-            buildChips()
-            search()
-            if (byIngredients) {
-                input.requestFocus()
-                (c.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
-            }
-        }, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
-        chip(tr("Récentes"), usage == Usage.RECENT, base, Usage.RECENT)
-        chip(tr("Fréquentes"), usage == Usage.MOST, base, Usage.MOST)
-        chip(tr("Favoris"), plain && filter.favoritesOnly, base.copy(favoritesOnly = true))
-        chip(tr("30 min max"), plain && filter.maxMinutes == 30, base.copy(maxMinutes = 30))
-        if (home) chip(tr("Végétarien"), plain && filter.tag == "Végétarien", base.copy(tag = "Végétarien"))
-        if (category.isEmpty()) for (cat in a.app.recipes.index.categories.take(30)) chip(cat, plain && filter.category == cat, base.copy(category = cat))
+        option(tr("★ Note"), false)
+        option(tr("A → Z"), true)
     }
 
     private fun search() {
@@ -186,7 +173,8 @@ class RecipesScreen(
         val q = query
         val f = filter
         val u = usage
-        val ingredients = byIngredients || q.contains(',')
+        // Plusieurs ingrédients séparés par des virgules : recherche « avec ce que j'ai ».
+        val ingredients = q.contains(',')
         val repo = a.app.recipes
         val index = repo.index
         searchExec.execute {
@@ -229,7 +217,7 @@ class RecipesScreen(
     }
 
     private fun searchHint(): String =
-        if (byIngredients) tr("Vos ingrédients (ex. : butternut, lardons)") else tr("Recette, ingrédient… (ex. : poulet, curry)")
+        if (category.isNotEmpty()) tr("Chercher dans « %s »…", category) else tr("Recette, ingrédient… (ex. : poulet, curry)")
 
     override fun onShow() {
         buildChips()
@@ -317,7 +305,7 @@ class RecipesScreen(
             val e = h.entry
             title.text = e.title
             val parts = ArrayList<String>()
-            if ((byIngredients || query.contains(',')) && query.isNotBlank() && h.matched > 0) {
+            if (query.contains(',') && query.isNotBlank() && h.matched > 0) {
                 val wanted = a.app.recipes.index.ingredientsOf(query).size
                 parts += tr("%d/%d ingrédients", h.matched, wanted)
             }

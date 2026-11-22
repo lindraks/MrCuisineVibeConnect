@@ -53,6 +53,11 @@ class ScaleScreen(a: MainActivity) : Screen(a) {
         return root
     }
 
+    /** Ouvrir la balance remet à zéro : on pèse ce qu'on pose ensuite, sans toucher Tare. */
+    override fun onShow() {
+        a.machine.tare()
+    }
+
     override fun onSnapshot(s: Snapshot) {
         if (!s.hasSample) {
             value.text = "—"

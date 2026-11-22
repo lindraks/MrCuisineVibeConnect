@@ -90,8 +90,17 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         right.setPadding(Ui.u(18), Ui.u(14), Ui.u(18), Ui.u(18))
         ring = TempRing(c)
         right.addView(ring, LinearLayout.LayoutParams(Ui.MATCH, 0, 1f))
-        weight = Ui.text(c, "", 18f, Ui.TEXT2)
-        right.addView(weight, Ui.lp(Ui.WRAP, Ui.WRAP, t = 2))
+        // Pesée sans quitter l'écran : poids en direct et Tare.
+        val scale = Ui.horizontal(c)
+        scale.background = Ui.round(Ui.SURFACE2, 20f)
+        scale.setPadding(Ui.u(16), Ui.u(8), Ui.u(8), Ui.u(8))
+        scale.addView(Icon(c, Icon.Kind.SCALE, Ui.TEXT2), LinearLayout.LayoutParams(Ui.u(24), Ui.u(24)).apply { rightMargin = Ui.u(10) })
+        weight = Ui.text(c, "", 30f, Ui.TEXT, Ui.LIGHT)
+        scale.addView(weight, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        scale.addView(Ui.button(c, tr("Tare"), Ui.Style.SECONDARY, height = 48, textSize = 17f) { a.machine.tare() }.apply {
+            setPadding(Ui.u(16), 0, Ui.u(16), 0)
+        })
+        right.addView(scale, Ui.lp(Ui.MATCH, Ui.WRAP, t = 6))
         hint = Ui.text(c, "", 16f, Ui.WARN).apply { gravity = Gravity.CENTER }
         right.addView(hint, Ui.lp(Ui.MATCH, Ui.WRAP, t = 8))
         startBtn = Ui.button(c, tr("Démarrer"), Ui.Style.PRIMARY, Icon.Kind.PLAY, height = 80, textSize = 24f) { start() }
@@ -231,7 +240,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     override fun onSnapshot(s: Snapshot) {
         ring.set(if (s.hasSample) s.actualTempC else 0, if (s.jobActive && s.jobTempLevel > 0) Mcc.celsiusForLevel(s.jobTempLevel) else
             if (tempLevel > 0) Mcc.celsiusForLevel(tempLevel) else 0, s.speedLevel)
-        weight.text = if (s.hasSample) tr("Balance : %d g", s.weightG) else tr("Base non connectée")
+        weight.text = if (s.hasSample) "${s.weightG} g" else "—"
         val manualJob = s.kind?.name == "MANUAL" && (s.state == JobState.RUNNING || s.state == JobState.STARTING || s.state == JobState.PAUSED)
         live = manualJob && s.state != JobState.PAUSED
         tempCard.repeatEnabled = !live
