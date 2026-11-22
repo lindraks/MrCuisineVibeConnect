@@ -154,6 +154,27 @@ class Prefs(context: Context) {
             p.edit().putString("haWebhook", v).commit()
         }
 
+    /** Serveur maison (add-on Home Assistant « Toque ») : « 192.168.1.20 » ou « http://…:8793 » ; vide : recettes Lidl. */
+    var homeServer: String
+        get() = p.getString("homeServer", "") ?: ""
+        set(v) {
+            p.edit().putString("homeServer", v).commit()
+        }
+
+    /** Favoris du robot déjà versés au serveur maison (une seule fois, à la première connexion). */
+    var homeMerged: Boolean
+        get() = p.getBoolean("homeMerged", false)
+        set(v) {
+            p.edit().putBoolean("homeMerged", v).commit()
+        }
+
+    /** Version du catalogue du serveur maison déjà téléchargée. */
+    var homeCatalog: String
+        get() = p.getString("homeCatalog", "") ?: ""
+        set(v) {
+            p.edit().putString("homeCatalog", v).commit()
+        }
+
     /** Une seule recette par groupe de doublons (même titre, mêmes ingrédients) dans les listes. */
     var hideDuplicates: Boolean
         get() = p.getBoolean("hideDuplicates", true)

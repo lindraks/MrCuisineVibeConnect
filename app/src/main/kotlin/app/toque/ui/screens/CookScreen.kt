@@ -24,6 +24,7 @@ import app.toque.ui.MainActivity
 import app.toque.ui.ProgressLine
 import app.toque.ui.Screen
 import app.toque.ui.Ui
+import app.toque.ui.stepText
 
 /**
  * Cuisine pas à pas. Chaque étape « machine » se lance d'un appui ; à la fin du programme,
@@ -134,6 +135,8 @@ class CookScreen(a: MainActivity, private val recipe: Recipe, startStep: Int) : 
     private fun next() {
         if (index >= recipe.steps.size - 1) {
             countCooked()
+            // Cuisinée jusqu'au bout : elle quitte « À cuisiner » (robot et téléphone).
+            a.app.home.cooked(recipe.id)
             a.prefs.guidedRecipe = ""
             a.prefs.guidedScale = ""
             a.chime(1)
@@ -168,7 +171,7 @@ class CookScreen(a: MainActivity, private val recipe: Recipe, startStep: Int) : 
         }
         val step = recipe.steps[index]
         counter.text = tr("ÉTAPE %d SUR %d", index + 1, n)
-        text.text = step.text.ifBlank { step.machine?.summary ?: "" }
+        text.text = if (step.text.isBlank()) step.machine?.summary ?: "" else stepText(step, recipe)
         val w = step.weigh
         weighBox.visibility = if (w != null) View.VISIBLE else View.GONE
         if (w != null) {

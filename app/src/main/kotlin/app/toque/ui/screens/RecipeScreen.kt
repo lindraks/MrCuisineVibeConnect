@@ -24,25 +24,29 @@ import app.toque.core.recipes.Ingredient
 import app.toque.core.recipes.Recipe
 import app.toque.core.recipes.RecipeAdjustments
 import app.toque.core.recipes.Step
+import app.toque.core.recipes.StepText
 import app.toque.core.recipes.Weigh
 import app.toque.core.recipes.adjusted
 import app.toque.core.recipes.unlistedWeighings
+import app.toque.recipes.HomeServer
 import app.toque.recipes.Reviews
 import app.toque.ui.Icon
 import app.toque.ui.ImageLoader
 import app.toque.ui.MainActivity
 import app.toque.ui.Screen
 import app.toque.ui.Ui
+import app.toque.ui.stepText
 
 /**
  * Fiche recette : ingrédients à gauche, étapes à droite, « Cuisiner » pour le pas-à-pas.
  * Une quantité se corrige en la touchant dans la liste d'ingrédients et les étapes qui
  * l'utilisent suivent ; la note et les corrections sont à l'utilisateur et restent en place quand le catalogue est synchronisé.
  */
-class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
+class RecipeScreen(a: MainActivity, private val recipe: Recipe, private val initialServings: Int = 0) : Screen(a) {
     override val title = recipe.title
     private lateinit var favIcon: Icon
     private lateinit var favLabel: TextView
+    private var planIcon: Icon? = null
     private var adjustments = a.app.recipes.adjustmentsOf(recipe.id)
     /**
      * Prorata de la balance (un ingrédient pesé, les autres suivent) : adaptations pour cette fois,
@@ -104,6 +108,13 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         favLabel = Ui.text(c, "", 18f, Ui.TEXT, Ui.MEDIUM)
         fav.addView(favLabel, LinearLayout.LayoutParams(Ui.WRAP, Ui.WRAP).apply { leftMargin = Ui.u(8) })
         actions.addView(fav)
+        if (HomeServer.configured(a.prefs)) {
+            // « À cuisiner » (partagé avec le téléphone) : icône seule, faute de place à côté de « Cuisiner ».
+            val plan = Ui.button(c, "", Ui.Style.SECONDARY, Icon.Kind.POT, height = 66) { togglePlanned() }
+            plan.contentDescription = tr("À cuisiner")
+            planIcon = plan.getChildAt(0) as? Icon
+            actions.addView(plan, LinearLayout.LayoutParams(Ui.WRAP, Ui.WRAP).apply { leftMargin = Ui.u(12) })
+        }
         left.addView(actions, Ui.lp(t = 14))
 
         renderIngredients()
@@ -128,6 +139,10 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         stepsBox.addView(Ui.scroll(c, steps), Ui.lp(Ui.MATCH, Ui.MATCH))
         root.addView(stepsBox, LinearLayout.LayoutParams(0, Ui.MATCH, 0.58f))
         refreshFavorite()
+        // Ouverte depuis « À cuisiner » : le nombre de personnes choisi sur le téléphone.
+        if (initialServings > 0 && recipe.servings > 0 && initialServings != recipe.servings) {
+            setServings(initialServings.coerceIn(1, maxOf(recipe.servings * 3, recipe.servings + 2)), warn = false)
+        }
         return root
     }
 
@@ -387,7 +402,8 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
      * l'envoi à Home Assistant : eau, sel et poivre décochés d'office.
      */
     private fun shoppingList() {
-        if (!HomeAssistant.configured(a.prefs)) {
+        val viaHome = HomeServer.configured(a.prefs)
+        if (!viaHome && !HomeAssistant.configured(a.prefs)) {
             a.toast(tr("Réglez d'abord l'adresse de Home Assistant dans Réglages."), Ui.WARN)
             return
         }
@@ -485,6 +501,13 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
             val chosen = items.filterIndexed { k, _ -> on[k] }.map { it.text }
             if (chosen.isEmpty()) return@button
             a.closeOverlay()
+            if (viaHome) {
+                a.toast(tr("Envoi à la liste de courses…"))
+                a.app.home.sendShopping(recipe.title, servings, chosen) { err ->
+                    if (err == null) a.toast(tr("%d articles ajoutés à la liste de courses.", chosen.size), Ui.OK) else a.toast(err, Ui.WARN)
+                }
+                return@button
+            }
             a.toast(tr("Envoi à Home Assistant…"))
             HomeAssistant.send(a.prefs, ShoppingList.payload(recipe.title, servings, chosen)) { err ->
                 if (err == null) a.toast(tr("%d articles envoyés à Home Assistant.", chosen.size), Ui.OK) else a.toast(err, Ui.WARN)
@@ -715,7 +738,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         num.background = Ui.round(Ui.ACCENT_DIM, 18f)
         row.addView(num, LinearLayout.LayoutParams(Ui.u(36), Ui.u(36)).apply { rightMargin = Ui.u(14) })
         val col = Ui.vertical(c)
-        if (s.text.isNotBlank()) col.addView(Ui.text(c, s.text, 18f, Ui.TEXT).apply { setLineSpacing(0f, 1.15f) })
+        if (s.text.isNotBlank()) col.addView(Ui.text(c, stepText(s, shown), 18f, Ui.TEXT).apply { setLineSpacing(0f, 1.15f) })
         val chips = Ui.horizontal(c)
         s.weigh?.let { w ->
             val changed = w.originalGrams > 0
@@ -733,9 +756,16 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         return row
     }
 
+    private fun togglePlanned() {
+        val now = !a.app.home.isPlanned(recipe.id)
+        a.app.home.setPlanned(recipe.id, if (now) servings.coerceAtLeast(0) else null)
+        refreshFavorite()
+        a.toast(if (now) tr("Ajoutée à « À cuisiner » (aussi sur le téléphone)") else tr("Retirée de « À cuisiner »"))
+    }
+
     private fun toggleFavorite() {
         val now = !a.app.recipes.isFavorite(recipe.id)
-        a.app.recipes.setFavorite(recipe.id, now)
+        a.app.home.setFavorite(recipe.id, now)
         refreshFavorite()
         a.toast(if (now) tr("Ajoutée aux favoris") else tr("Retirée des favoris"))
     }
@@ -745,6 +775,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         favIcon.set(if (f) Icon.Kind.STAR_FILLED else Icon.Kind.STAR)
         favIcon.color = if (f) Ui.ACCENT else Ui.TEXT
         favLabel.text = tr("Favori")
+        planIcon?.color = if (a.app.home.isPlanned(recipe.id)) Ui.ACCENT else Ui.TEXT
     }
 
     override fun onKnobPress(): Boolean {

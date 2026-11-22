@@ -8,6 +8,7 @@ import app.toque.core.i18n.I18n
 import app.toque.core.i18n.tr
 import app.toque.core.recipes.adjusted
 import app.toque.core.recipes.RecipeAdjustments
+import app.toque.recipes.HomeServer
 import app.toque.ui.Icon
 import app.toque.ui.MainActivity
 import app.toque.ui.Screen
@@ -26,7 +27,11 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     private lateinit var resumeCard: LinearLayout
     private lateinit var resumeText: TextView
     private lateinit var knobChip: LinearLayout
+    private lateinit var plannedCard: LinearLayout
+    private lateinit var plannedText: TextView
+    private lateinit var searchBar: LinearLayout
     private var unsub: (() -> Unit)? = null
+    private var unsubHome: (() -> Unit)? = null
     private val tick = object : Runnable {
         override fun run() {
             refreshClock()
@@ -53,6 +58,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         left.addView(knobChip, Ui.lp(Ui.WRAP, Ui.WRAP, t = 12))
 
         val search = Ui.horizontal(c)
+        searchBar = search
         search.setPadding(Ui.u(24), 0, Ui.u(24), 0)
         search.background = Ui.pressable(Ui.round(Ui.SURFACE, 36f, Ui.STROKE, 1f), 36f)
         search.addView(Icon(c, Icon.Kind.SEARCH, Ui.TEXT2), LinearLayout.LayoutParams(Ui.u(28), Ui.u(28)).apply { rightMargin = Ui.u(14) })
@@ -70,6 +76,18 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             a.push(RecipesScreen(a, initialUsage = RecipesScreen.Usage.MOST))
         }, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
         left.addView(shortcuts, Ui.lp(Ui.MATCH, Ui.WRAP, t = 14))
+
+        // « À cuisiner » : les recettes prévues (courses faites), choisies sur le téléphone ou ici.
+        plannedCard = Ui.horizontal(c)
+        plannedCard.setPadding(Ui.u(22), Ui.u(14), Ui.u(18), Ui.u(14))
+        plannedCard.background = Ui.pressable(Ui.round(Ui.ACCENT, 24f), 24f)
+        plannedCard.addView(Icon(c, Icon.Kind.POT, Ui.BG), LinearLayout.LayoutParams(Ui.u(28), Ui.u(28)).apply { rightMargin = Ui.u(14) })
+        plannedText = Ui.ellipsize(Ui.text(c, "", 20f, Ui.BG, Ui.MEDIUM))
+        plannedCard.addView(plannedText, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        plannedCard.addView(Icon(c, Icon.Kind.CHEVRON, Ui.BG), LinearLayout.LayoutParams(Ui.u(24), Ui.u(24)))
+        plannedCard.isClickable = true
+        plannedCard.setOnClickListener { a.push(RecipesScreen(a, initialUsage = RecipesScreen.Usage.PLANNED)) }
+        left.addView(plannedCard, Ui.lp(Ui.MATCH, Ui.WRAP, t = 14))
 
         resumeCard = Ui.horizontal(c)
         resumeCard.setPadding(Ui.u(22), Ui.u(16), Ui.u(18), Ui.u(16))
@@ -156,7 +174,22 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         recipesSub.text = when {
             !repo.loaded -> tr("Chargement…")
             n == 0 -> tr("Aucune recette Lidl pour l'instant")
+            HomeServer.configured(a.prefs) -> tr("%d recettes", n)
             else -> tr("%d recettes Lidl", n)
+        }
+        val planned = a.app.home.planned.count { p -> repo.index.entries.any { it.id == p.id } }
+        val home = HomeServer.configured(a.prefs)
+        plannedCard.visibility = if (home) View.VISIBLE else View.GONE
+        // Place pour la carte « À cuisiner » sur l'écran de 600 de haut : horloge un peu plus petite.
+        clock.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, Ui.uf(if (home) 100f else 132f))
+        (searchBar.layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
+            val top = Ui.u(if (home) 20 else 34)
+            if (lp.topMargin != top) { lp.topMargin = top; searchBar.layoutParams = lp }
+        }
+        plannedText.text = when (planned) {
+            0 -> tr("À cuisiner : rien de prévu")
+            1 -> tr("À cuisiner : 1 recette")
+            else -> tr("À cuisiner : %d recettes", planned)
         }
         val favs = repo.index.entries.count { it.favorite }
         favSub.text = if (favs == 0) tr("Aucun favori") else if (favs == 1) tr("1 favori") else tr("%d favoris", favs)
@@ -171,12 +204,15 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         refreshClock()
         refresh()
         unsub = a.app.recipes.onChange { refresh() }
+        unsubHome = a.app.home.onChange { refresh() }
+        a.app.home.refreshSoon()
         view.removeCallbacks(tick)
         view.postDelayed(tick, 10_000)
     }
 
     override fun onHide() {
         unsub?.invoke()
+        unsubHome?.invoke()
         view.removeCallbacks(tick)
     }
 

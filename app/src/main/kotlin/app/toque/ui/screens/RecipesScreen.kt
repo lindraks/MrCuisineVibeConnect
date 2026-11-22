@@ -24,6 +24,7 @@ import app.toque.core.i18n.I18n
 import app.toque.core.i18n.tr
 import app.toque.core.recipes.RecipeFilter
 import app.toque.core.recipes.SearchIndex
+import app.toque.recipes.HomeServer
 import app.toque.ui.Icon
 import app.toque.ui.ImageLoader
 import app.toque.ui.MainActivity
@@ -41,13 +42,14 @@ class RecipesScreen(
     favorites: Boolean = false,
     initialUsage: Usage = Usage.NONE,
 ) : Screen(a) {
-    /** Listes tirées des cuissons : dernières recettes cuisinées, ou les plus cuisinées. */
-    enum class Usage { NONE, RECENT, MOST }
+    /** Listes tirées des cuissons (dernières, plus cuisinées) ou des recettes prévues (« À cuisiner »). */
+    enum class Usage { NONE, RECENT, MOST, PLANNED }
 
     override val title = when {
         favorites -> tr("Favoris")
         initialUsage == Usage.RECENT -> tr("Récentes")
         initialUsage == Usage.MOST -> tr("Fréquentes")
+        initialUsage == Usage.PLANNED -> tr("À cuisiner")
         else -> tr("Recettes")
     }
 
@@ -66,6 +68,7 @@ class RecipesScreen(
     private lateinit var emptyText: TextView
     private val adapter = Adapter()
     private var unsub: (() -> Unit)? = null
+    private var unsubHome: (() -> Unit)? = null
     private val runSearch = Runnable { search() }
 
     override fun build(): View {
@@ -127,7 +130,7 @@ class RecipesScreen(
             setOnItemClickListener { _, _, pos, _ ->
                 val hit = results.getOrNull(pos) ?: return@setOnItemClickListener
                 val r = a.app.recipes.get(hit.entry.id)
-                if (r != null) a.push(RecipeScreen(a, r))
+                if (r != null) a.push(RecipeScreen(a, r, initialServings = if (usage == Usage.PLANNED) a.app.home.plannedServings(r.id) else 0))
             }
             setOnScrollListener(object : AbsListView.OnScrollListener {
                 override fun onScrollStateChanged(v: AbsListView?, state: Int) {
@@ -153,6 +156,8 @@ class RecipesScreen(
         }
         val base = RecipeFilter()
         val plain = usage == Usage.NONE
+        val home = HomeServer.configured(a.prefs)
+        if (home) chip(tr("À cuisiner"), usage == Usage.PLANNED, base, Usage.PLANNED)
         chip(tr("Mieux notées"), plain && filter == base, base)
         chip(tr("A → Z"), plain && filter == base.copy(alphabetical = true), base.copy(alphabetical = true))
         chips.addView(Ui.toggleChip(c, tr("Par ingrédients"), byIngredients) {
@@ -169,6 +174,7 @@ class RecipesScreen(
         chip(tr("Fréquentes"), usage == Usage.MOST, base, Usage.MOST)
         chip(tr("Favoris"), plain && filter.favoritesOnly, base.copy(favoritesOnly = true))
         chip(tr("30 min max"), plain && filter.maxMinutes == 30, base.copy(maxMinutes = 30))
+        if (home) chip(tr("Végétarien"), plain && filter.tag == "Végétarien", base.copy(tag = "Végétarien"))
         for (cat in a.app.recipes.index.categories.take(30)) chip(cat, plain && filter.category == cat, base.copy(category = cat))
     }
 
@@ -187,7 +193,11 @@ class RecipesScreen(
             }
             val hits = if (u == Usage.NONE) found else {
                 // Ordre des cuissons ; la recherche tapée, s'il y en a une, ne fait que filtrer.
-                val ids = if (u == Usage.RECENT) repo.recentIds() else repo.mostCookedIds()
+                val ids = when (u) {
+                    Usage.RECENT -> repo.recentIds()
+                    Usage.PLANNED -> a.app.home.planned.map { it.id }
+                    else -> repo.mostCookedIds()
+                }
                 val byId = index.entries.associateBy { it.id }
                 val keep = if (q.isBlank()) null else found.mapTo(HashSet()) { it.entry.id }
                 ids.filter { keep == null || it in keep }.mapNotNull { id -> byId[id]?.let { SearchIndex.Hit(it, 0.0, 0) } }
@@ -210,6 +220,7 @@ class RecipesScreen(
             none && a.prefs.mode == Prefs.Mode.HARDWARE ->
                 tr("Les recettes Lidl apparaîtront après la première synchronisation.\nRéglages › Recettes Lidl › Synchroniser.")
             none -> tr("Les recettes Lidl apparaîtront après la première synchronisation, une fois Toque installé sur le robot.")
+            usage == Usage.PLANNED && query.isBlank() -> tr("Rien à cuisiner pour l'instant.\nAjoutez des recettes depuis le téléphone (appli Toque) ou avec le bouton « À cuisiner » d'une recette.")
             usage != Usage.NONE && query.isBlank() -> tr("Aucune recette cuisinée pour l'instant.\nLes recettes apparaissent ici dès leur première cuisson.")
             filter.favoritesOnly && query.isBlank() -> tr("Aucun favori pour l'instant.\nTouchez l'étoile d'une recette pour l'ajouter.")
             else -> tr("Aucune recette ne correspond.\nAstuce : séparez plusieurs ingrédients par des virgules.")
@@ -223,6 +234,8 @@ class RecipesScreen(
         buildChips()
         search()
         unsub = a.app.recipes.onChange { buildChips(); search() }
+        unsubHome = a.app.home.onChange { if (usage == Usage.PLANNED) search() }
+        if (usage == Usage.PLANNED) a.app.home.refreshSoon()
         if (focusSearch) view.postDelayed({
             input.requestFocus()
             (c.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
@@ -231,6 +244,7 @@ class RecipesScreen(
 
     override fun onHide() {
         unsub?.invoke()
+        unsubHome?.invoke()
     }
 
     override fun onKnob(delta: Int): Boolean {
@@ -309,6 +323,7 @@ class RecipesScreen(
             val u = a.app.recipes.usage(e.id)
             if (u != null && usage == Usage.MOST) parts += if (u.count == 1) tr("1 fois") else tr("%d fois", u.count)
             if (u != null && usage == Usage.RECENT) parts += ago(u.lastMs)
+            if (usage == Usage.PLANNED) a.app.home.plannedServings(e.id).takeIf { it > 0 }?.let { parts += tr("pour %d pers.", it) }
             if (e.ratingCount > 0) parts += "★ " + String.format(I18n.locale, "%.1f", e.rating) + " (${e.ratingCount})"
             if (e.totalMinutes > 0) parts += "${e.totalMinutes} min"
             if (e.category.isNotBlank()) parts += e.category

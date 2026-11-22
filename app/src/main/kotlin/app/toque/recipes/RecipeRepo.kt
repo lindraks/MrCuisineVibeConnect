@@ -177,6 +177,24 @@ class RecipeRepo(private val context: Context) {
         }
     }
 
+    /** Favoris relus sur le serveur maison : la table prend exactement [ids] (index rechargé si besoin). */
+    fun replaceFavorites(ids: Set<String>) {
+        exec.execute {
+            val same = synchronized(favorites) { favorites == ids }
+            if (same) return@execute
+            val db = helper.writableDatabase
+            db.beginTransaction()
+            try {
+                db.delete("favorites", null, null)
+                for (id in ids) db.execSQL("INSERT OR IGNORE INTO favorites (id) VALUES (?)", arrayOf(id))
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+            rebuild()
+        }
+    }
+
     /**
      * Remplace tout le catalogue par l'import du jour (miroir de l'appli d'origine).
      * Les favoris sont conservés ; ceux marqués dans l'appli d'origine sont ajoutés.

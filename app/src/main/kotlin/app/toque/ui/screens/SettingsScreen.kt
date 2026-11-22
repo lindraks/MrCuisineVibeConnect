@@ -23,6 +23,8 @@ import app.toque.core.machine.Snapshot
 import app.toque.core.time.ZoneLookup
 import app.toque.core.update.Release
 import app.toque.recipes.LidlSync
+import app.toque.recipes.HomeServer
+import app.toque.recipes.HomeSync
 import app.toque.recipes.OnlineSync
 import app.toque.ui.Icon
 import app.toque.ui.MainActivity
@@ -38,6 +40,7 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
     private lateinit var host: EditText
     private lateinit var haUrl: EditText
     private lateinit var haHook: EditText
+    private lateinit var homeField: EditText
     private lateinit var port: EditText
     private lateinit var syncText: TextView
     private lateinit var bowlText: TextView
@@ -149,6 +152,18 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         time.addView(Ui.button(c, tr("Mettre à l'heure"), Ui.Style.SECONDARY, Icon.Kind.SYNC, height = 52) { setClock() },
             Ui.lp(Ui.WRAP, Ui.WRAP, t = 10))
         refreshTime()
+
+        // ---- Serveur maison
+        val home = section(right, tr("Serveur maison"), Icon.Kind.HOME)
+        home.addView(Ui.text(c, tr("Recettes Monsieur Cuisine et Cookomix du serveur de la maison, avec les favoris et « À cuisiner » partagés avec le téléphone. Laissez vide pour garder les recettes Lidl."),
+            15f, Ui.TEXT3).apply { setLineSpacing(0f, 1.1f) })
+        homeField = field(a.prefs.homeServer, tr("Adresse (ex. : 192.168.1.20)"))
+        home.addView(homeField, Ui.lp(Ui.MATCH, Ui.u(58), t = 10))
+        home.addView(Ui.button(c, tr("Enregistrer et synchroniser"), Ui.Style.PRIMARY, Icon.Kind.SYNC, height = 52) {
+            saveHome()
+            if (HomeServer.configured(a.prefs)) sync(online = true)
+            else a.toast(tr("Serveur maison retiré : les recettes Lidl reviendront à la prochaine synchronisation."))
+        }, Ui.lp(Ui.WRAP, Ui.WRAP, t = 10))
 
         // ---- Recettes Lidl
         val lidl = section(right, tr("Recettes Lidl"), Icon.Kind.SYNC)
@@ -402,7 +417,8 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         syncing = true
         syncText.text = tr("Synchronisation en cours… (quelques minutes)")
         Thread {
-            val r = if (online) OnlineSync(a, a.prefs, a.app.recipes, a.app.log).sync { msg -> view.post { syncText.text = msg } }
+            val r = if (online && HomeServer.configured(a.prefs)) HomeSync(a.prefs, a.app.recipes, a.app.log).sync { msg -> view.post { syncText.text = msg } }
+            else if (online) OnlineSync(a, a.prefs, a.app.recipes, a.app.log).sync { msg -> view.post { syncText.text = msg } }
             else LidlSync(a, a.prefs, a.app.recipes, a.app.log).importNow { msg -> view.post { syncText.text = msg } }
             view.post {
                 syncing = false
@@ -559,8 +575,20 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         a.prefs.haWebhook = haHook.text.toString().trim().ifEmpty { "toque_courses" }
     }
 
+    /** Nouvelle adresse du serveur maison : favoris du robot à reverser, catalogue à reprendre. */
+    private fun saveHome() {
+        if (!::homeField.isInitialized) return
+        val v = homeField.text.toString().trim()
+        if (v == a.prefs.homeServer) return
+        a.prefs.homeServer = v
+        a.prefs.homeMerged = false
+        a.prefs.homeCatalog = ""
+        a.app.home.refreshSoon()
+    }
+
     override fun onHide() {
         saveHa()
+        saveHome()
         unsubRecipes?.invoke()
         unsubRecipes = null
     }

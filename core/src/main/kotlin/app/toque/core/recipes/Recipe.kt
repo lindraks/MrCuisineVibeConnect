@@ -118,12 +118,22 @@ data class StepMachine(
 /** [originalGrams] : poids de la recette quand l'utilisateur l'a adapté (voir [RecipeAdjustments]) ; 0 sinon. Non enregistré. */
 data class Weigh(val label: String, val grams: Int, val originalGrams: Int = 0)
 
+/**
+ * Mention d'un ingrédient dans le texte d'une étape (repère « {{k}} » de [Step.template]) :
+ * [index] dans [Recipe.allIngredients] ; [qty]/[unit]/[name] tels qu'écrits dans l'étape (« 400 g de
+ * marrons ») ou vides pour reprendre la quantité de la liste ; [part] : « la moitié du beurre » = 0,5.
+ */
+data class QtyRef(val index: Int, val qty: String = "", val unit: String = "", val name: String = "", val part: Double = 1.0)
+
 data class Step(
     val text: String,
     val machine: StepMachine? = null,
     val weigh: Weigh? = null,
     /** Réglage importé non vérifié : l'utilisateur doit le confirmer avant d'exécuter. */
     val needsReview: Boolean = false,
+    /** Texte avec repères {{0}}, {{1}}… à la place des quantités (voir [StepText]) ; vide sinon. */
+    val template: String = "",
+    val refs: List<QtyRef> = emptyList(),
 )
 
 data class Recipe(
@@ -146,6 +156,10 @@ data class Recipe(
     /** Note moyenne sur 5 et nombre de notes sur monsieur-cuisine.com (0 : aucune). */
     val rating: Double = 0.0,
     val ratingCount: Int = 0,
+    /** Rayons du serveur maison (une recette peut en avoir plusieurs), [category] étant le premier. */
+    val categories: List<String> = emptyList(),
+    /** Critères transverses du serveur maison : « Végétarien », « Sans gluten », « Rapide »… */
+    val filters: List<String> = emptyList(),
 ) {
     val machineSteps: Int get() = steps.count { it.machine != null }
     val allIngredients: List<Ingredient> get() = ingredients.flatMap { it.items }
@@ -188,9 +202,21 @@ object RecipeCodec {
             }
             s.weigh?.let { w -> m["weigh"] = linkedMapOf("label" to w.label, "grams" to w.grams) }
             if (s.needsReview) m["needsReview"] = true
+            if (s.template.isNotEmpty() && s.refs.isNotEmpty()) {
+                m["textQ"] = s.template
+                m["refs"] = s.refs.map { q ->
+                    val rm = linkedMapOf<String, Any?>("i" to q.index)
+                    if (q.qty.isNotEmpty()) { rm["q"] = q.qty; rm["u"] = q.unit; rm["n"] = q.name }
+                    if (q.part != 1.0) rm["f"] = q.part
+                    rm
+                }
+            }
             m
         },
-    )
+    ).apply {
+        if (r.categories.isNotEmpty()) put("categories", r.categories)
+        if (r.filters.isNotEmpty()) put("filters", r.filters)
+    }
 
     fun fromMap(m: Map<String, Any?>, fallbackSource: RecipeSource = RecipeSource.IMPORTED): Recipe? {
         val title = m.str("title")?.trim().orEmpty()
@@ -220,7 +246,13 @@ object RecipeCodec {
                 val g = wm.int("grams") ?: 0
                 if (g > 0) Weigh(wm.str("label").orEmpty(), g) else null
             }
-            if (text.isEmpty() && mc == null) null else Step(text, mc, w, s.bool("needsReview") ?: false)
+            val refs = s["refs"].list().mapNotNull { qAny ->
+                val q = qAny.obj()
+                val i = q.int("i") ?: return@mapNotNull null
+                QtyRef(i, q.str("q").orEmpty(), q.str("u").orEmpty(), q.str("n").orEmpty(), q.double("f") ?: 1.0)
+            }
+            val template = if (refs.isEmpty()) "" else s.str("textQ").orEmpty()
+            if (text.isEmpty() && mc == null) null else Step(text, mc, w, s.bool("needsReview") ?: false, template, refs)
         }
         return Recipe(
             id = id,
@@ -240,6 +272,8 @@ object RecipeCodec {
             author = m.str("author")?.trim().orEmpty(),
             rating = (m.double("rating") ?: 0.0).coerceIn(0.0, 5.0),
             ratingCount = (m.int("ratingCount") ?: 0).coerceAtLeast(0),
+            categories = m["categories"].list().mapNotNull { (it as? String)?.trim()?.takeIf { t -> t.isNotEmpty() } },
+            filters = m["filters"].list().mapNotNull { (it as? String)?.trim()?.takeIf { t -> t.isNotEmpty() } },
         )
     }
 

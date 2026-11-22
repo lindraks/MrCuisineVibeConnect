@@ -9,6 +9,8 @@ import android.content.Intent
 import android.os.Process
 import app.toque.core.i18n.I18n
 import app.toque.machine.MachineClient
+import app.toque.recipes.HomeLink
+import app.toque.recipes.HomeSync
 import app.toque.recipes.RecipeRepo
 import app.toque.ui.MainActivity
 import java.util.Locale
@@ -21,6 +23,8 @@ class ToqueApp : Application() {
         private set
     val machine: MachineClient by lazy { MachineClient(this) }
     val recipes: RecipeRepo by lazy { RecipeRepo(this) }
+    /** Favoris et « À cuisiner » partagés avec le serveur maison (et le téléphone). */
+    val home: HomeLink by lazy { HomeLink(prefs, recipes, log) }
 
     override fun onCreate() {
         super.onCreate()
@@ -55,6 +59,9 @@ class ToqueApp : Application() {
         }
         log.write("interface", "démarrage")
         TimeSync.start(this, prefs, log)
+        // Nouveau catalogue annoncé par le serveur maison : téléchargé en arrière-plan.
+        home.onNewCatalog = { Thread { HomeSync(prefs, recipes, log).sync() }.start() }
+        home.start()
     }
 
     private fun isMainProcess(): Boolean {

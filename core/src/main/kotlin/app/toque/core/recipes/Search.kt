@@ -74,6 +74,8 @@ data class RecipeFilter(
     val maxMinutes: Int = 0,
     /** Ordre alphabétique (favoris d'abord) au lieu du classement par note. */
     val alphabetical: Boolean = false,
+    /** Critère du serveur maison (« Végétarien »…) ; vide : tous. */
+    val tag: String = "",
 )
 
 /**
@@ -96,6 +98,8 @@ class SearchIndex(recipes: List<Recipe>) {
         val normTitle: String,
         val rating: Double = 0.0,
         val ratingCount: Int = 0,
+        val categories: List<String> = emptyList(),
+        val filters: List<String> = emptyList(),
     )
 
     data class Hit(val entry: Entry, val score: Double, val matched: Int)
@@ -118,7 +122,7 @@ class SearchIndex(recipes: List<Recipe>) {
         val list = ArrayList<Entry>(recipes.size)
         for ((index, r) in recipes.withIndex()) {
             list += Entry(r.id, r.title, r.category, r.tags, r.favorite, r.source, r.totalMinutes, r.image,
-                r.machineSteps, TextNorm.normalize(r.title), r.rating, r.ratingCount)
+                r.machineSteps, TextNorm.normalize(r.title), r.rating, r.ratingCount, r.categories, r.filters)
             fun add(text: String, w: Int) {
                 for (t in TextNorm.tokens(text)) {
                     val p = postings.getOrPut(t) { HashMap(4) }
@@ -128,6 +132,7 @@ class SearchIndex(recipes: List<Recipe>) {
             }
             add(r.title, W_TITLE)
             add(r.category, W_TAG)
+            for (c in r.categories) add(c, W_TAG)
             for (t in r.tags) add(t, W_TAG)
             for (i in r.allIngredients) add(i.name, W_INGREDIENT)
             for (s in r.steps) add(s.text, W_STEP)
@@ -156,7 +161,7 @@ class SearchIndex(recipes: List<Recipe>) {
     private val byRank = compareByDescending<Entry> { rank(it) }.thenByDescending { it.ratingCount }.thenBy { it.normTitle }
 
     val categories: List<String> by lazy {
-        entries.map { it.category }.filter { it.isNotBlank() }.distinct().sortedBy { TextNorm.normalize(it) }
+        entries.flatMap { listOf(it.category) + it.categories }.filter { it.isNotBlank() }.distinct().sortedBy { TextNorm.normalize(it) }
     }
 
     private fun prefixMatches(token: String): List<String> {
@@ -190,7 +195,8 @@ class SearchIndex(recipes: List<Recipe>) {
     }
 
     private fun accepts(e: Entry, f: RecipeFilter): Boolean {
-        if (f.category.isNotEmpty() && e.category != f.category) return false
+        if (f.category.isNotEmpty() && e.category != f.category && f.category !in e.categories) return false
+        if (f.tag.isNotEmpty() && f.tag !in e.filters) return false
         if (f.favoritesOnly && !e.favorite) return false
         if (f.source != null && e.source != f.source) return false
         if (f.maxMinutes > 0 && (e.totalMinutes <= 0 || e.totalMinutes > f.maxMinutes)) return false
