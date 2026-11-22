@@ -230,6 +230,8 @@ class HomeLink(private val prefs: Prefs, private val repo: RecipeRepo, private v
             planned = plan
             reachable = true
             if (changed) notifyChanged()
+            val maj = (state["maj"] as? Number)?.toLong() ?: 0L
+            if (maj > prefs.lastUpdateAt) onUpdateRequested?.invoke(maj)
             val version = state.str("catalogue").orEmpty()
             if (version.isNotEmpty() && version != prefs.homeCatalog && prefs.autoSync) onNewCatalog?.invoke()
         } catch (e: Exception) {
@@ -240,6 +242,9 @@ class HomeLink(private val prefs: Prefs, private val repo: RecipeRepo, private v
             log.write("maison", "serveur injoignable : ${e.message}")
         }
     }
+
+    /** Appelé (fil du lien) quand le serveur demande une mise à jour de Toque ([Long] : heure de la demande). */
+    @Volatile var onUpdateRequested: ((Long) -> Unit)? = null
 
     /** Appelé (fil du lien) quand le serveur annonce un nouveau catalogue. */
     @Volatile var onNewCatalog: (() -> Unit)? = null

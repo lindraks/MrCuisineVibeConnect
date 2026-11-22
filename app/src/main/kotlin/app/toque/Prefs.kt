@@ -175,6 +175,13 @@ class Prefs(context: Context) {
             p.edit().putLong("lastSentAt", v).commit()
         }
 
+    /** Dernière demande de mise à jour à distance déjà traitée (heure, ms). */
+    var lastUpdateAt: Long
+        get() = p.getLong("lastUpdateAt", 0)
+        set(v) {
+            p.edit().putLong("lastUpdateAt", v).commit()
+        }
+
     /** Version du catalogue du serveur maison déjà téléchargée. */
     var homeCatalog: String
         get() = p.getString("homeCatalog", "") ?: ""

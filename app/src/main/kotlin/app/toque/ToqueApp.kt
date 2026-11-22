@@ -10,6 +10,7 @@ import android.os.Process
 import app.toque.core.i18n.I18n
 import app.toque.machine.MachineClient
 import app.toque.recipes.HomeLink
+import app.toque.recipes.HomeServer
 import app.toque.recipes.HomeSync
 import app.toque.recipes.RecipeRepo
 import app.toque.ui.MainActivity
@@ -69,7 +70,40 @@ class ToqueApp : Application() {
                 Thread { HomeSync(prefs, recipes, log).sync() }.start()
             }
         }
+        // Mise à jour demandée à distance (serveur maison) : installée seulement si rien ne tourne.
+        home.onUpdateRequested = { at ->
+            if (!machine.snapshot.busy) {
+                prefs.lastUpdateAt = at
+                Thread { remoteUpdate() }.start()
+            }
+        }
         home.start()
+    }
+
+    /** Dernière version publiée sur GitHub (signature vérifiée), installée sans écran ; résultat noté au serveur. */
+    private fun remoteUpdate() {
+        val result = try {
+            HomeServer.call(prefs, "DELETE", "/api/robot/maj")
+            val u = app.toque.update.Updater(this)
+            val r = u.latest()
+            if (!u.isNewer(r)) "déjà à jour (${u.installedVersion})"
+            else {
+                report(true, "mise à jour vers ${r.version}…")
+                u.install(u.download(r) {})
+                "installée : ${r.version}"
+            }
+        } catch (e: Exception) {
+            log.crash("maj à distance", e)
+            "échec : ${e.message ?: e}"
+        }
+        report(!result.startsWith("échec"), "mise à jour à distance — $result")
+    }
+
+    private fun report(ok: Boolean, message: String) {
+        try {
+            HomeServer.call(prefs, "POST", "/api/robot/rapport", app.toque.core.json.Json.write(mapOf("ok" to ok, "message" to message)))
+        } catch (_: Exception) {
+        }
     }
 
     private fun isMainProcess(): Boolean {
