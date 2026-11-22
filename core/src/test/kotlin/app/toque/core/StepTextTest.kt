@@ -54,6 +54,12 @@ class StepTextTest {
         assertEquals("Ajouter 75 g de beurre.", StepText.render(six.steps[2], six))
     }
 
+    @Test fun anExtractIsNotAPinch() {
+        assertEquals("½", Proportions.scaledQty(Ingredient("0.25", "c.c.", "Extrait de vanille"), 2.0))
+        assertEquals(null, Proportions.scaledQty(Ingredient("1", "pincée", "Muscade"), 2.0))
+        assertEquals(null, Proportions.scaledQty(Ingredient("1", "", "trait de citron"), 2.0))
+    }
+
     @Test fun anUnknownMarkKeepsTheOriginalText() {
         val broken = Step("Texte d'origine.", template = "Mettre {{4}}.", refs = listOf(QtyRef(9)))
         assertEquals("Texte d'origine.", StepText.render(broken, recipe))

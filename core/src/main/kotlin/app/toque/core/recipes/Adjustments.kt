@@ -389,9 +389,12 @@ object Proportions {
     }
 
     /** Sel, poivre, pincées, pointes… : au goût, pas en proportion. */
+    private val FIXED_WORDS = setOf("pince", "pinces", "pincee", "pincees", "pointe", "pointes", "soupcon", "soupcons", "trait", "traits")
+
     private fun fixed(i: Ingredient): Boolean {
         val all = QuantityLinks.norm(i.unit + " " + i.name)
-        if (listOf("pince", "pointe", "soupcon", "trait").any { all.contains(it) }) return true
+        // Mots entiers : « extrait de vanille » n'est pas un « trait ».
+        if (all.split(' ').any { it in FIXED_WORDS }) return true
         val first = QuantityLinks.keywords(i.name).firstOrNull()
         return first == "sel" || first == "poivre"
     }
