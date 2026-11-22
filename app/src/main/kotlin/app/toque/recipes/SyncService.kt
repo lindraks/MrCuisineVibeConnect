@@ -13,7 +13,7 @@ import app.toque.machine.MachineService
 import app.toque.ui.MainActivity
 import java.util.Calendar
 
-/** Synchro nocturne des recettes (03 h 30) : serveur maison s'il est réglé, sinon monsieur-cuisine.com. */
+/** Synchro nocturne des recettes (03 h 30) depuis le serveur maison (seule source de recettes). */
 @Suppress("DEPRECATION")
 class SyncService : IntentService("toque-synchro") {
     override fun onHandleIntent(intent: Intent?) {
@@ -21,7 +21,6 @@ class SyncService : IntentService("toque-synchro") {
         if (!app.prefs.autoSync) return
         if (System.currentTimeMillis() - app.prefs.lastSyncMs < 6 * 3600_000L) return
         if (HomeServer.configured(app.prefs)) HomeSync(app.prefs, app.recipes, app.log).sync()
-        else OnlineSync(this, app.prefs, app.recipes, app.log).sync()
     }
 
     companion object {

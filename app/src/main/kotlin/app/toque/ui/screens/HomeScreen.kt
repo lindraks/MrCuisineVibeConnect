@@ -117,7 +117,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val grid = Ui.vertical(c)
         val row1 = Ui.horizontal(c)
         val row2 = Ui.horizontal(c)
-        val (t1, s1) = tile(Icon.Kind.BOOK, tr("Recettes")) { a.push(RecipesScreen(a)) }
+        val (t1, s1) = tile(Icon.Kind.BOOK, tr("Recettes")) { a.push(CategoriesScreen(a)) }
         recipesSub = s1
         row1.addView(t1, tileLp(true))
         row1.addView(tile(Icon.Kind.POT, tr("Cuisson\nmanuelle"), hasSub = false) { a.push(ManualScreen(a)) }.first, tileLp(true))
@@ -173,9 +173,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val n = repo.count
         recipesSub.text = when {
             !repo.loaded -> tr("Chargement…")
-            n == 0 -> tr("Aucune recette Lidl pour l'instant")
-            HomeServer.configured(a.prefs) -> tr("%d recettes", n)
-            else -> tr("%d recettes Lidl", n)
+            n == 0 -> tr("Aucune recette pour l'instant")
+            else -> tr("%d recettes", n)
         }
         val planned = a.app.home.planned.count { p -> repo.index.entries.any { it.id == p.id } }
         val home = HomeServer.configured(a.prefs)

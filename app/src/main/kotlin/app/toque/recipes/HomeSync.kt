@@ -70,9 +70,33 @@ class HomeSync(private val prefs: Prefs, private val repo: RecipeRepo, private v
         repo.refresh()
         prefs.homeCatalog = version
         photos(keep, progress)
+        purge()
         val n = repo.count
         val note = if (bad > 0) " " + tr("(%d illisibles)", bad) else ""
         return LidlSync.Report(true, tr("%d recettes du serveur maison", n) + note, n)
+    }
+
+    /**
+     * Plus de recettes Lidl en double : photos qui ne servent plus à aucune recette (anciennes
+     * recettes Lidl ou retirées du serveur) et index de l'ancienne synchro monsieur-cuisine.com.
+     */
+    private fun purge() {
+        try {
+            val used = repo.imageNames()
+            var freed = 0L
+            var count = 0
+            for (f in repo.imagesDir.listFiles().orEmpty()) {
+                val base = f.name.removePrefix("large-").removePrefix("small-")
+                if (f.isFile && base !in used && !f.name.endsWith(".part")) {
+                    freed += f.length()
+                    if (f.delete()) count++
+                }
+            }
+            File(repo.imagesDir.parentFile, "recettes-en-ligne.json").delete()
+            if (count > 0) log.write("synchro maison", "purge : $count photos inutilisées (${freed / 1_048_576} Mo)")
+        } catch (e: Exception) {
+            log.write("synchro maison", "purge impossible : ${e.message}")
+        }
     }
 
     private fun photos(ids: Collection<String>, progress: (String) -> Unit) {

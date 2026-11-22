@@ -25,7 +25,6 @@ import app.toque.core.update.Release
 import app.toque.recipes.LidlSync
 import app.toque.recipes.HomeServer
 import app.toque.recipes.HomeSync
-import app.toque.recipes.OnlineSync
 import app.toque.ui.Icon
 import app.toque.ui.MainActivity
 import app.toque.ui.Screen
@@ -153,42 +152,26 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
             Ui.lp(Ui.WRAP, Ui.WRAP, t = 10))
         refreshTime()
 
-        // ---- Serveur maison
-        val home = section(right, tr("Serveur maison"), Icon.Kind.HOME)
-        home.addView(Ui.text(c, tr("Recettes Monsieur Cuisine et Cookomix du serveur de la maison, avec les favoris et « À cuisiner » partagés avec le téléphone. Laissez vide pour garder les recettes Lidl."),
+        // ---- Recettes (serveur maison)
+        val home = section(right, tr("Recettes"), Icon.Kind.SYNC)
+        home.addView(Ui.text(c, tr("Recettes Monsieur Cuisine et Cookomix du serveur maison, avec les favoris et « À cuisiner » partagés avec le téléphone."),
             15f, Ui.TEXT3).apply { setLineSpacing(0f, 1.1f) })
-        homeField = field(a.prefs.homeServer, tr("Adresse (ex. : 192.168.1.20)"))
+        homeField = field(a.prefs.homeServer, tr("Adresse du serveur maison (ex. : 192.168.1.20)"))
         home.addView(homeField, Ui.lp(Ui.MATCH, Ui.u(58), t = 10))
-        home.addView(Ui.button(c, tr("Enregistrer et synchroniser"), Ui.Style.PRIMARY, Icon.Kind.SYNC, height = 52) {
-            saveHome()
-            if (HomeServer.configured(a.prefs)) sync(online = true)
-            else a.toast(tr("Serveur maison retiré : les recettes Lidl reviendront à la prochaine synchronisation."))
-        }, Ui.lp(Ui.WRAP, Ui.WRAP, t = 10))
-
-        // ---- Recettes Lidl
-        val lidl = section(right, tr("Recettes Lidl"), Icon.Kind.SYNC)
-        lidl.addView(Ui.text(c, tr("Toque télécharge lui-même les recettes officielles du Monsieur Cuisine connect sur monsieur-cuisine.com (sans compte)."),
-            16f, Ui.TEXT2).apply { setLineSpacing(0f, 1.15f) })
         syncText = Ui.text(c, "", 16f, Ui.TEXT)
-        lidl.addView(syncText, Ui.lp(t = 10))
-        val b1 = Ui.horizontal(c)
-        b1.addView(Ui.button(c, tr("Synchroniser"), Ui.Style.PRIMARY, Icon.Kind.SYNC, height = 58) { sync(online = true) }, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
-        lidl.addView(b1, Ui.lp(t = 12))
-        lidl.addView(Ui.text(c, tr("Autre source : les recettes déjà présentes dans l'appli d'origine du robot (remplacent celles du site)."),
-            14f, Ui.TEXT3).apply { setLineSpacing(0f, 1.1f) }, Ui.lp(t = 12))
-        // Un bouton par ligne : côte à côte, « Ouvrir l'appli d'origine » n'avait plus la place et
-        // son texte se coupait au milieu d'un mot.
-        lidl.addView(Ui.button(c, tr("Importer de l'appli d'origine"), Ui.Style.SECONDARY, height = 52) { sync(online = false) },
-            Ui.lp(Ui.WRAP, Ui.WRAP, t = 6))
-        lidl.addView(Ui.button(c, tr("Ouvrir l'appli d'origine"), Ui.Style.GHOST, Icon.Kind.LINK, height = 52) { a.openVendorApp() },
-            Ui.lp(Ui.WRAP, Ui.WRAP, t = 8))
-        lidl.addView(toggle(tr("Synchro automatique chaque nuit"), a.prefs.autoSync) { a.prefs.autoSync = it }, Ui.lp(t = 10))
-        lidl.addView(toggle(tr("Masquer les recettes en double"), a.prefs.hideDuplicates) {
+        home.addView(syncText, Ui.lp(t = 10))
+        home.addView(Ui.button(c, tr("Enregistrer et synchroniser"), Ui.Style.PRIMARY, Icon.Kind.SYNC, height = 56) {
+            saveHome()
+            if (HomeServer.configured(a.prefs)) sync()
+            else a.toast(tr("Indiquez l'adresse du serveur maison."), Ui.WARN)
+        }, Ui.lp(Ui.WRAP, Ui.WRAP, t = 12))
+        home.addView(toggle(tr("Synchro automatique chaque nuit"), a.prefs.autoSync) { a.prefs.autoSync = it }, Ui.lp(t = 10))
+        home.addView(toggle(tr("Masquer les recettes en double"), a.prefs.hideDuplicates) {
             a.prefs.hideDuplicates = it
             a.app.recipes.load()
         }, Ui.lp(t = 10))
         val hidden = a.app.recipes.duplicatesHidden
-        lidl.addView(Ui.text(c, tr("Même titre et mêmes ingrédients : une seule est montrée, celle que vous avez en favori ou déjà cuisinée, sinon la plus notée.") +
+        home.addView(Ui.text(c, tr("Même titre et mêmes ingrédients : une seule est montrée, celle que vous avez en favori ou déjà cuisinée, sinon la plus notée.") +
             (if (hidden > 0) " " + tr("%d masquées.", hidden) else ""), 15f, Ui.TEXT3).apply { setLineSpacing(0f, 1.1f) }, Ui.lp(t = 6))
 
         // ---- Mises à jour
@@ -222,6 +205,7 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         tools.addView(link(tr("Bouton rotatif")) { a.push(KnobScreen(a)) })
         tools.addView(link(tr("Journal")) { a.push(LogScreen(a)) })
         tools.addView(link(tr("Paramètres Android")) { a.openAndroidSettings() })
+        tools.addView(link(tr("Ouvrir l'appli d'origine")) { a.openVendorApp() })
         tools.addView(link(tr("Revenir à l'appli d'origine")) { restoreVendor() })
         val version = try { a.packageManager.getPackageInfo(a.packageName, 0).versionName } catch (_: Exception) { "?" }
         tools.addView(Ui.text(c, tr("Toque %s · protocole d'après le Monsieur Cuisine Developer SDK (licence MIT). " +
@@ -408,18 +392,13 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         }
     }
 
-    private fun sync(online: Boolean) {
-        if (syncing) return
-        if (!online && a.prefs.mode != Prefs.Mode.HARDWARE) {
-            a.toast(tr("Disponible une fois Toque installé sur le robot (mode Machine réelle)"), Ui.WARN)
-            return
-        }
+    /** Synchronisation avec le serveur maison (seule source de recettes). */
+    private fun sync() {
+        if (syncing || !HomeServer.configured(a.prefs)) return
         syncing = true
         syncText.text = tr("Synchronisation en cours… (quelques minutes)")
         Thread {
-            val r = if (online && HomeServer.configured(a.prefs)) HomeSync(a.prefs, a.app.recipes, a.app.log).sync { msg -> view.post { syncText.text = msg } }
-            else if (online) OnlineSync(a, a.prefs, a.app.recipes, a.app.log).sync { msg -> view.post { syncText.text = msg } }
-            else LidlSync(a, a.prefs, a.app.recipes, a.app.log).importNow { msg -> view.post { syncText.text = msg } }
+            val r = HomeSync(a.prefs, a.app.recipes, a.app.log).sync { msg -> view.post { syncText.text = msg } }
             view.post {
                 syncing = false
                 refreshSync()

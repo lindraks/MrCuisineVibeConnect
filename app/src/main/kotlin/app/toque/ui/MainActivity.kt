@@ -501,7 +501,7 @@ class MainActivity : Activity() {
 
     // ------------------------------------------------------------------ appli d'origine
 
-    /** Retour depuis l'appli d'origine : on la coupe du moteur, on reprend la main, on importe. */
+    /** Retour depuis l'appli d'origine : on la coupe du moteur et on reprend la main (plus d'import de recettes Lidl). */
     private fun endVendorSession() {
         prefs.vendorSession = false
         toast(tr("Reprise de la main sur le robot…"))
@@ -510,8 +510,6 @@ class MainActivity : Activity() {
             sync.forceStop()
             sync.setVendorHardware(false)
             main.post { machine.resumePort() }
-            val r = sync.importNow()
-            main.post { toast(r.message, if (r.ok) Ui.OK else Ui.WARN) }
         }.start()
     }
 
@@ -523,7 +521,7 @@ class MainActivity : Activity() {
         confirm(
             tr("Ouvrir l'appli d'origine"),
             tr("Toque libère le moteur et lance l'appli Monsieur Cuisine d'origine, qui se synchronise avec les serveurs Lidl comme d'habitude.\n\n" +
-                "Revenez ensuite à Toque avec le bouton « Retour à Toque » affiché par-dessus (vous pouvez le déplacer) : les recettes seront importées automatiquement."),
+                "Revenez ensuite à Toque avec le bouton « Retour à Toque » affiché par-dessus (vous pouvez le déplacer)."),
             tr("Ouvrir"), icon = Icon.Kind.SYNC,
         ) {
             machine.suspendPort { v ->

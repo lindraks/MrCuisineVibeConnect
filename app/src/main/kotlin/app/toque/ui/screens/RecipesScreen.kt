@@ -41,6 +41,8 @@ class RecipesScreen(
     private val focusSearch: Boolean = false,
     favorites: Boolean = false,
     initialUsage: Usage = Usage.NONE,
+    /** Rayon choisi dans le panneau des catégories : la liste et ses filtres restent dans ce rayon. */
+    private val category: String = "",
 ) : Screen(a) {
     /** Listes tirées des cuissons (dernières, plus cuisinées) ou des recettes prévues (« À cuisiner »). */
     enum class Usage { NONE, RECENT, MOST, PLANNED }
@@ -50,10 +52,11 @@ class RecipesScreen(
         initialUsage == Usage.RECENT -> tr("Récentes")
         initialUsage == Usage.MOST -> tr("Fréquentes")
         initialUsage == Usage.PLANNED -> tr("À cuisiner")
+        category.isNotEmpty() -> category
         else -> tr("Recettes")
     }
 
-    private var filter = RecipeFilter(favoritesOnly = favorites)
+    private var filter = RecipeFilter(favoritesOnly = favorites, category = category)
     private var usage = initialUsage
     /** Recherche par ingrédients (« butternut, lardons ») : les recettes qui en ont le plus d'abord. */
     private var byIngredients = false
@@ -154,7 +157,7 @@ class RecipesScreen(
         fun chip(label: String, selected: Boolean, f: RecipeFilter, u: Usage = Usage.NONE) {
             chips.addView(Ui.toggleChip(c, label, selected) { filter = f; usage = u; buildChips(); search() }, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
         }
-        val base = RecipeFilter()
+        val base = RecipeFilter(category = category)
         val plain = usage == Usage.NONE
         val home = HomeServer.configured(a.prefs)
         if (home) chip(tr("À cuisiner"), usage == Usage.PLANNED, base, Usage.PLANNED)
@@ -175,7 +178,7 @@ class RecipesScreen(
         chip(tr("Favoris"), plain && filter.favoritesOnly, base.copy(favoritesOnly = true))
         chip(tr("30 min max"), plain && filter.maxMinutes == 30, base.copy(maxMinutes = 30))
         if (home) chip(tr("Végétarien"), plain && filter.tag == "Végétarien", base.copy(tag = "Végétarien"))
-        for (cat in a.app.recipes.index.categories.take(30)) chip(cat, plain && filter.category == cat, base.copy(category = cat))
+        if (category.isEmpty()) for (cat in a.app.recipes.index.categories.take(30)) chip(cat, plain && filter.category == cat, base.copy(category = cat))
     }
 
     private fun search() {
@@ -217,9 +220,7 @@ class RecipesScreen(
         count.text = if (results.isEmpty()) "" else if (results.size == 1) tr("1 recette") else tr("%d recettes", results.size)
         empty.visibility = if (results.isEmpty() && repo.loaded) View.VISIBLE else View.GONE
         emptyText.text = when {
-            none && a.prefs.mode == Prefs.Mode.HARDWARE ->
-                tr("Les recettes Lidl apparaîtront après la première synchronisation.\nRéglages › Recettes Lidl › Synchroniser.")
-            none -> tr("Les recettes Lidl apparaîtront après la première synchronisation, une fois Toque installé sur le robot.")
+            none -> tr("Les recettes apparaîtront après la première synchronisation.\nRéglages › Recettes › Enregistrer et synchroniser.")
             usage == Usage.PLANNED && query.isBlank() -> tr("Rien à cuisiner pour l'instant.\nAjoutez des recettes depuis le téléphone (appli Toque) ou avec le bouton « À cuisiner » d'une recette.")
             usage != Usage.NONE && query.isBlank() -> tr("Aucune recette cuisinée pour l'instant.\nLes recettes apparaissent ici dès leur première cuisson.")
             filter.favoritesOnly && query.isBlank() -> tr("Aucun favori pour l'instant.\nTouchez l'étoile d'une recette pour l'ajouter.")

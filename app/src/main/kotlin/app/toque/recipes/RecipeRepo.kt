@@ -366,6 +366,20 @@ class RecipeRepo(private val context: Context) {
         exec.submit { rebuild() }.get()
     }
 
+    /** Noms de fichier des photos utilisées par les recettes enregistrées. */
+    fun imageNames(): Set<String> = exec.submit<Set<String>> {
+        val out = HashSet<String>()
+        val rx = Regex("\"image\"\\s*:\\s*\"([^\"]*)\"")
+        helper.readableDatabase.rawQuery("SELECT json FROM recipes", null).use { c ->
+            while (c.moveToNext()) {
+                val url = rx.find(c.getString(0))?.groupValues?.get(1) ?: continue
+                val name = url.substringAfterLast('/').substringBefore('?')
+                if (name.isNotEmpty()) out += name
+            }
+        }
+        out
+    }.get()
+
     fun imageFile(name: String): File? {
         if (name.isBlank()) return null
         val clean = name.substringAfterLast('/')
