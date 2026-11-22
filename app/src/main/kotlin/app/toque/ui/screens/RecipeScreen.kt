@@ -126,12 +126,19 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe, private val init
         steps.addView(section(tr("Étapes")))
         steps.addView(stepsList)
         renderSteps()
-        McOnline.apiIdOf(recipe.id)?.let { apiId ->
+        // Avis : site Monsieur Cuisine (recettes web-…), ou commentaires Cookomix par le serveur maison.
+        val apiId = McOnline.apiIdOf(recipe.id)
+        val source: ((Int) -> McOnline.ReviewPage)? = when {
+            apiId != null -> { p -> Reviews.load(apiId, p) }
+            recipe.id.startsWith("ckx-") && HomeServer.configured(a.prefs) -> { p -> Reviews.loadHome(a.prefs, recipe.id, p) }
+            else -> null
+        }
+        source?.let { src ->
             steps.addView(reviewsBox, Ui.lp(t = 22))
             reviewsBox.addView(section(if (recipe.ratingCount > 0)
                 tr("Avis · %s/5 (%d notes)", rating(recipe.rating), recipe.ratingCount) else tr("Avis")))
             reviewsBox.addView(reviewsState, Ui.lp(t = 10))
-            loadReviews(apiId, 1)
+            loadReviews(src, 1)
         }
         val stepsBox = Ui.vertical(c)
         stepsBox.background = Ui.round(Ui.SURFACE, 24f)
@@ -664,14 +671,14 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe, private val init
     private var moreButton: View? = null
     private var loading = false
 
-    private fun loadReviews(apiId: Long, page: Int) {
+    private fun loadReviews(src: (Int) -> McOnline.ReviewPage, page: Int) {
         if (loading) return
         loading = true
         reviewsState.visibility = View.VISIBLE
         reviewsState.text = tr("Chargement des avis…")
         Thread {
             val result = try {
-                Reviews.load(apiId, page)
+                src(page)
             } catch (e: Exception) {
                 null
             }
@@ -681,12 +688,12 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe, private val init
                     reviewsState.text = tr("Avis indisponibles (pas de connexion ?)")
                     return@post
                 }
-                showReviews(apiId, result)
+                showReviews(src, result)
             }
         }.start()
     }
 
-    private fun showReviews(apiId: Long, p: McOnline.ReviewPage) {
+    private fun showReviews(src: (Int) -> McOnline.ReviewPage, p: McOnline.ReviewPage) {
         moreButton?.let { reviewsBox.removeView(it) }
         moreButton = null
         if (p.page == 1 && p.reviews.isEmpty()) {
@@ -698,7 +705,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe, private val init
         if (p.page < p.totalPages) {
             val shown = reviewsBox.childCount - 2
             val more = Ui.button(c, tr("Voir plus d'avis (%d sur %d)", shown, p.total), Ui.Style.GHOST, height = 50, textSize = 16f) {
-                loadReviews(apiId, p.page + 1)
+                loadReviews(src, p.page + 1)
             }
             moreButton = more
             reviewsBox.addView(more, Ui.lp(Ui.WRAP, Ui.WRAP, t = 12))
@@ -710,7 +717,8 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe, private val init
         box.background = Ui.round(Ui.SURFACE2, 16f)
         box.setPadding(Ui.u(16), Ui.u(12), Ui.u(16), Ui.u(12))
         val head = Ui.horizontal(c)
-        head.addView(Ui.text(c, "★".repeat(r.rating) + "☆".repeat(5 - r.rating), 17f, Ui.ACCENT), Ui.lp(Ui.WRAP, Ui.WRAP, r = 12))
+        // Commentaires Cookomix : pas de note, pas d'étoiles.
+        if (r.rating > 0) head.addView(Ui.text(c, "★".repeat(r.rating) + "☆".repeat(5 - r.rating), 17f, Ui.ACCENT), Ui.lp(Ui.WRAP, Ui.WRAP, r = 12))
         val who = listOf(r.author.ifBlank { tr("Anonyme") }, r.date).filter { it.isNotBlank() }.joinToString(" · ")
         head.addView(Ui.ellipsize(Ui.text(c, who, 15f, Ui.TEXT3)), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
         box.addView(head)
