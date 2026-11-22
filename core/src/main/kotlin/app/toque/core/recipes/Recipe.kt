@@ -160,6 +160,8 @@ data class Recipe(
     val categories: List<String> = emptyList(),
     /** Critères transverses du serveur maison : « Végétarien », « Sans gluten », « Rapide »… */
     val filters: List<String> = emptyList(),
+    /** Personnes au plus sans trop remplir le bol (calcul du serveur maison) ; 0 : inconnu. */
+    val maxServings: Int = 0,
 ) {
     val machineSteps: Int get() = steps.count { it.machine != null }
     val allIngredients: List<Ingredient> get() = ingredients.flatMap { it.items }
@@ -216,6 +218,7 @@ object RecipeCodec {
     ).apply {
         if (r.categories.isNotEmpty()) put("categories", r.categories)
         if (r.filters.isNotEmpty()) put("filters", r.filters)
+        if (r.maxServings > 0) put("maxServings", r.maxServings)
     }
 
     fun fromMap(m: Map<String, Any?>, fallbackSource: RecipeSource = RecipeSource.IMPORTED): Recipe? {
@@ -274,6 +277,7 @@ object RecipeCodec {
             ratingCount = (m.int("ratingCount") ?: 0).coerceAtLeast(0),
             categories = m["categories"].list().mapNotNull { (it as? String)?.trim()?.takeIf { t -> t.isNotEmpty() } },
             filters = m["filters"].list().mapNotNull { (it as? String)?.trim()?.takeIf { t -> t.isNotEmpty() } },
+            maxServings = (m.int("maxServings") ?: 0).coerceAtLeast(0),
         )
     }
 

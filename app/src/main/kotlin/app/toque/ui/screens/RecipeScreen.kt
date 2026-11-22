@@ -550,7 +550,8 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe, private val init
     private fun setServings(n: Int, warn: Boolean = true) {
         val max = maxOf(recipe.servings * 3, recipe.servings + 2)
         if (n < 1 || n > max || n == servings) return
-        val wasAbove = servings > recipe.servings
+        val limit = bowlLimit()
+        val wasAbove = servings > limit
         servings = n
         if (n == recipe.servings) {
             scaled = null
@@ -561,11 +562,14 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe, private val init
         shown = recipe.adjusted(currentAdj)
         renderIngredients()
         renderSteps()
-        if (warn && n > recipe.servings && !wasAbove) {
-            a.toast(tr("Recette à %d %% : attention à la contenance du bol. Les temps de cuisson ne changent pas.",
-                Math.round(n * 100.0 / recipe.servings).toInt()), Ui.WARN)
+        // Avertissement seulement au-delà de ce que le bol accepte (calcul du serveur maison), une fois.
+        if (warn && n > limit && !wasAbove) {
+            a.toast(tr("Au-delà de %d personnes, le bol risque d'être trop plein.", limit), Ui.WARN)
         }
     }
+
+    /** Personnes au plus sans trop remplir le bol : estimation du serveur, sinon la recette telle quelle. */
+    private fun bowlLimit(): Int = if (recipe.maxServings > recipe.servings) recipe.maxServings else recipe.servings
 
     private fun shortName(i: Ingredient): String =
         QuantityLinks.keyName(i.name).substringBefore(',').trim().ifEmpty { i.name.trim() }
@@ -646,7 +650,8 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe, private val init
         closeWeigh()
         renderIngredients()
         renderSteps()
-        if (percent > 100) a.toast(tr("Recette à %d %% : attention à la contenance du bol. Les temps de cuisson ne changent pas.", percent), Ui.WARN)
+        val maxPercent = if (recipe.servings > 0) bowlLimit() * 100 / recipe.servings else 100
+        if (percent > maxPercent) a.toast(tr("Recette à %d %% : le bol risque d'être trop plein.", percent), Ui.WARN)
     }
 
     override fun onSnapshot(s: Snapshot) {
