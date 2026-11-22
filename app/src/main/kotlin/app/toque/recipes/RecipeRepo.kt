@@ -298,7 +298,11 @@ class RecipeRepo(private val context: Context) {
         val wanted = gone.filterKeys { it in favs || adjustments.containsKey(it) || usage.containsKey(it) }
         if (wanted.isEmpty()) return
         val byTitle = HashMap<String, String>()
-        for ((id, title) in titles(db)) byTitle.putIfAbsent(RecipeAdjustments.titleKey(title), id)
+        // Pas de putIfAbsent : absent d'Android 6 (API 24), il faisait échouer la synchro.
+        for ((id, title) in titles(db)) {
+            val k = RecipeAdjustments.titleKey(title)
+            if (!byTitle.containsKey(k)) byTitle[k] = id
+        }
         for ((id, title) in wanted) {
             val target = byTitle[RecipeAdjustments.titleKey(title)] ?: continue
             if (target == id) continue
