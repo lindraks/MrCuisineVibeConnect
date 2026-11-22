@@ -59,6 +59,9 @@ class CategoriesScreen(a: MainActivity) : Screen(a) {
                 a.push(RecipesScreen(a, initialUsage = RecipesScreen.Usage.PLANNED))
             }
         }
+        // Bébé en haut, avec les raccourcis (demande du foyer).
+        val baby = counts["Bébé"] ?: 0
+        if (baby > 0) top += Tile("Bébé", tr("Bébé"), baby) { a.push(RecipesScreen(a, category = "Bébé")) }
         top += Tile(null, tr("Récentes"), null, Icon.Kind.CLOCK) { a.push(RecipesScreen(a, initialUsage = RecipesScreen.Usage.RECENT)) }
         top += Tile(null, tr("Fréquentes"), null, Icon.Kind.FLAME) { a.push(RecipesScreen(a, initialUsage = RecipesScreen.Usage.MOST)) }
         grid(top)
@@ -69,7 +72,7 @@ class CategoriesScreen(a: MainActivity) : Screen(a) {
         for ((group, label, cats) in GROUPS) {
             val present = cats.filter { (counts[it] ?: 0) > 0 }
             placed += cats
-            if (present.isEmpty()) continue
+            if (present.isEmpty() || group == "Bébé") continue
             if (cats.size == 1) { single += present; continue }
             header(group, label)
             grid(present.map { cat -> Tile(cat, cat, counts[cat]) { a.push(RecipesScreen(a, category = cat)) } })
