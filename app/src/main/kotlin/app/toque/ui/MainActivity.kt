@@ -599,6 +599,43 @@ class MainActivity : Activity() {
         }.start()
     }
 
+    /**
+     * Appli Magisk (droits root : « Réponse automatique », autorisation de Toque), avec le bouton
+     * « Retour à Toque ». Magisk peut avoir été masqué sous un autre nom : on cherche aussi par libellé.
+     */
+    fun openMagisk() {
+        Thread {
+            val launch = packageManager.getLaunchIntentForPackage("com.topjohnwu.magisk") ?: try {
+                val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                packageManager.queryIntentActivities(launcher, 0).firstOrNull {
+                    it.loadLabel(packageManager).toString().contains("Magisk", ignoreCase = true)
+                }?.activityInfo?.let { Intent(launcher).setClassName(it.packageName, it.name) }
+            } catch (_: Exception) {
+                null
+            }
+            val ok = launch != null && ReturnBubble.ensurePermission(this)
+            main.post {
+                if (launch == null) {
+                    toast(tr("Appli Magisk introuvable sur ce robot"), Ui.WARN)
+                    return@post
+                }
+                if (!ok) {
+                    toast(tr("Impossible d'afficher le bouton « Retour à Toque » (root ?) : ouverture annulée"), Ui.WARN)
+                    return@post
+                }
+                prefs.returnBubble = true
+                ReturnBubble.start(this)
+                try {
+                    startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (_: Exception) {
+                    prefs.returnBubble = false
+                    ReturnBubble.stop(this)
+                    toast(tr("Appli Magisk introuvable sur ce robot"), Ui.WARN)
+                }
+            }
+        }.start()
+    }
+
     companion object {
         private var reopenSettings = false
 

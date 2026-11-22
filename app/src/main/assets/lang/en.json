@@ -531,5 +531,7 @@
   "Boissons": "Drinks",
   "Bases": "Basics",
   "Bébé": "Baby",
-  "Recette envoyée depuis le téléphone": "Recipe sent from the phone"
+  "Recette envoyée depuis le téléphone": "Recipe sent from the phone",
+  "Appli Magisk introuvable sur ce robot": "Magisk app not found on this robot",
+  "Magisk (droits root)": "Magisk (root access)"
 }

@@ -205,6 +205,7 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         tools.addView(link(tr("Bouton rotatif")) { a.push(KnobScreen(a)) })
         tools.addView(link(tr("Journal")) { a.push(LogScreen(a)) })
         tools.addView(link(tr("Paramètres Android")) { a.openAndroidSettings() })
+        tools.addView(link(tr("Magisk (droits root)")) { a.openMagisk() })
         tools.addView(link(tr("Ouvrir l'appli d'origine")) { a.openVendorApp() })
         tools.addView(link(tr("Revenir à l'appli d'origine")) { restoreVendor() })
         val version = try { a.packageManager.getPackageInfo(a.packageName, 0).versionName } catch (_: Exception) { "?" }
