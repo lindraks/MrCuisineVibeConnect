@@ -184,9 +184,10 @@ class Prefs(context: Context) {
 
     /** Historique des cuissons du robot déjà versé au serveur maison (une seule fois). */
     var homeCookedSent: Boolean
-        get() = p.getBoolean("homeCookedSent", false)
+        // « 2 » : la 0.9.5 a pu marquer l'envoi fait avant d'avoir chargé les cuissons (liste vide).
+        get() = p.getBoolean("homeCookedSent2", false)
         set(v) {
-            p.edit().putBoolean("homeCookedSent", v).commit()
+            p.edit().putBoolean("homeCookedSent2", v).commit()
         }
 
     /** Version du catalogue du serveur maison déjà téléchargée. */

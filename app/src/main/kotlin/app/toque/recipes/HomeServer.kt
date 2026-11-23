@@ -202,7 +202,8 @@ class HomeLink(private val prefs: Prefs, private val repo: RecipeRepo, private v
                 HomeServer.call(prefs, "POST", "/api/cuisinees", Json.write(mapOf("id" to id, "at" to at)))
                 synchronized(pendingCooked) { pendingCooked.remove(id to at) }
             }
-            if (!prefs.homeCookedSent) {
+            // Seulement une fois la base chargée : avant, la liste des cuissons est encore vide.
+            if (!prefs.homeCookedSent && repo.loaded) {
                 // Première fois : les cuissons déjà connues du robot (nombre et dernière date).
                 val all = repo.cookedAll().map { (id, u) -> mapOf("id" to id, "count" to u.count, "last" to u.lastMs) }
                 HomeServer.call(prefs, "POST", "/api/cuisinees", Json.write(mapOf("historique" to all)))
