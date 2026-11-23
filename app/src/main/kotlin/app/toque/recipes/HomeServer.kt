@@ -96,6 +96,8 @@ class HomeLink(private val prefs: Prefs, private val repo: RecipeRepo, private v
     /** Changements faits sur le robot pas encore reçus par le serveur : id → présent ou non. */
     private val pendingFav = LinkedHashMap<String, Boolean>()
     private val pendingPlan = LinkedHashMap<String, Int?>()
+    /** Cuissons pas encore reçues par le serveur : (id, heure ms). */
+    private val pendingCooked = ArrayList<Pair<String, Long>>()
     private val tick = object : Runnable {
         override fun run() {
             refresh()
@@ -155,6 +157,16 @@ class HomeLink(private val prefs: Prefs, private val repo: RecipeRepo, private v
         }
     }
 
+    /** Une cuisson réelle (programme lancé ou recette terminée) : notée dans l'historique du foyer. */
+    fun reportCooked(id: String) {
+        if (!HomeServer.configured(prefs)) return
+        val at = System.currentTimeMillis()
+        worker.post {
+            synchronized(pendingCooked) { pendingCooked += id to at }
+            flush()
+        }
+    }
+
     /** Recette cuisinée jusqu'au bout : elle quitte « À cuisiner ». */
     fun cooked(id: String) {
         if (isPlanned(id)) setPlanned(id, null)
@@ -185,6 +197,16 @@ class HomeLink(private val prefs: Prefs, private val repo: RecipeRepo, private v
                 if (servings == null) HomeServer.call(prefs, "DELETE", "/api/a-cuisiner/" + HomeServer.path(id))
                 else HomeServer.call(prefs, "PUT", "/api/a-cuisiner/" + HomeServer.path(id), Json.write(mapOf("portions" to servings)))
                 synchronized(pendingPlan) { if (pendingPlan[id] == servings) pendingPlan.remove(id) }
+            }
+            for ((id, at) in synchronized(pendingCooked) { ArrayList(pendingCooked) }) {
+                HomeServer.call(prefs, "POST", "/api/cuisinees", Json.write(mapOf("id" to id, "at" to at)))
+                synchronized(pendingCooked) { pendingCooked.remove(id to at) }
+            }
+            if (!prefs.homeCookedSent) {
+                // Première fois : les cuissons déjà connues du robot (nombre et dernière date).
+                val all = repo.cookedAll().map { (id, u) -> mapOf("id" to id, "count" to u.count, "last" to u.lastMs) }
+                HomeServer.call(prefs, "POST", "/api/cuisinees", Json.write(mapOf("historique" to all)))
+                prefs.homeCookedSent = true
             }
             return true
         } catch (e: Exception) {

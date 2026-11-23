@@ -51,6 +51,7 @@ class CookScreen(a: MainActivity, private val recipe: Recipe, startStep: Int) : 
         if (counted) return
         counted = true
         a.app.recipes.markCooked(recipe.id)
+        a.app.home.reportCooked(recipe.id)
     }
     private val done = HashSet<Int>()
     private var launchedStep = -1

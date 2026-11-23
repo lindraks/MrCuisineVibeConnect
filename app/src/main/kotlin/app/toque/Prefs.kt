@@ -182,6 +182,13 @@ class Prefs(context: Context) {
             p.edit().putLong("lastUpdateAt", v).commit()
         }
 
+    /** Historique des cuissons du robot déjà versé au serveur maison (une seule fois). */
+    var homeCookedSent: Boolean
+        get() = p.getBoolean("homeCookedSent", false)
+        set(v) {
+            p.edit().putBoolean("homeCookedSent", v).commit()
+        }
+
     /** Version du catalogue du serveur maison déjà téléchargée. */
     var homeCatalog: String
         get() = p.getString("homeCatalog", "") ?: ""

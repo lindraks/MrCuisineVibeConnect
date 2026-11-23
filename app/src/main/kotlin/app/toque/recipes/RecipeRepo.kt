@@ -351,6 +351,9 @@ class RecipeRepo(private val context: Context) {
 
     fun usage(id: String): Usage? = cooked[id]
 
+    /** Toutes les cuissons enregistrées (copie), pour l'historique du serveur maison. */
+    fun cookedAll(): Map<String, Usage> = HashMap(cooked)
+
     /** Recettes cuisinées, de la plus récente à la plus ancienne (seulement celles du catalogue). */
     fun recentIds(limit: Int = 60): List<String> {
         val known = index.entries.mapTo(HashSet()) { it.id }
