@@ -106,7 +106,9 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
             val ok = a.app.home.ambientAction(id)
             main.post {
                 if (!ok) a.toast(tr("Action impossible : serveur maison injoignable"), Ui.WARN)
-                main.postDelayed({ if (alive) load() }, 700)
+                // Relectures rapprochées : le serveur renvoie tout de suite l'état demandé (volume,
+                // pause), Spotify met ensuite une à trois secondes pour changer de morceau.
+                for (ms in longArrayOf(150, 1_500, 4_000)) main.postDelayed({ if (alive) load() }, ms)
             }
         }.start()
     }
