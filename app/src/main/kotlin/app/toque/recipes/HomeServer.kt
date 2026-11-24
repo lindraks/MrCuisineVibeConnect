@@ -7,6 +7,7 @@ import app.toque.Logbook
 import app.toque.Prefs
 import app.toque.core.i18n.tr
 import app.toque.core.json.Json
+import app.toque.core.json.bool
 import app.toque.core.json.int
 import app.toque.core.json.list
 import app.toque.core.json.obj
@@ -108,6 +109,69 @@ class HomeLink(private val prefs: Prefs, private val repo: RecipeRepo, private v
     fun start() {
         worker.removeCallbacks(tick)
         worker.post(tick)
+        if (!ambientWatch) {
+            ambientWatch = true
+            Thread({ watchAmbient() }, "toque-ambiance").apply { isDaemon = true }.start()
+        }
+    }
+
+    // ---------------------------------------------------------------- écran d'ambiance
+    /** Vrai quand le serveur demande l'écran d'ambiance (présence dans la cuisine, hors nuit). */
+    @Volatile var ambient = false
+        private set
+    @Volatile private var ambientWatch = false
+    private val ambientListeners = ArrayList<(Boolean) -> Unit>()
+
+    fun onAmbient(l: (Boolean) -> Unit): () -> Unit {
+        synchronized(ambientListeners) { ambientListeners += l }
+        return { synchronized(ambientListeners) { ambientListeners -= l } }
+    }
+
+    /** Attente longue : le serveur répond dès que la présence ou la nuit change (25 s au plus). */
+    private fun watchAmbient() {
+        var presence = false
+        var night = false
+        while (true) {
+            if (!HomeServer.configured(prefs)) {
+                pause(30_000)
+                continue
+            }
+            try {
+                val r = Json.parse(HomeServer.call(prefs, "GET",
+                    "/api/ecran/attente?presence=${if (presence) 1 else 0}&nuit=${if (night) 1 else 0}", timeoutMs = 15_000)).obj()
+                presence = r.bool("presence") ?: false
+                night = r.bool("nuit") ?: false
+                val wanted = r.bool("ambiance") ?: false
+                if (wanted != ambient) {
+                    ambient = wanted
+                    main.post { for (l in synchronized(ambientListeners) { ArrayList(ambientListeners) }) l(wanted) }
+                }
+            } catch (e: Exception) {
+                // 403 : écran non autorisé pour ce robot sur le serveur ; on réessaie rarement.
+                pause(if (e.message?.contains("403") == true) 300_000L else 15_000L)
+            }
+        }
+    }
+
+    /** Contenu de l'écran d'ambiance (cartes génériques préparées par le serveur) ; null si indisponible. */
+    fun ambientContent(): Map<String, Any?>? = try {
+        Json.parse(HomeServer.call(prefs, "GET", "/api/ecran")).obj()
+    } catch (_: Exception) {
+        null
+    }
+
+    fun ambientAction(id: String): Boolean = try {
+        HomeServer.call(prefs, "POST", "/api/ecran/action", Json.write(mapOf("id" to id)))
+        true
+    } catch (_: Exception) {
+        false
+    }
+
+    private fun pause(ms: Long) {
+        try {
+            Thread.sleep(ms)
+        } catch (_: InterruptedException) {
+        }
     }
 
     /** Relecture immédiate (après un changement de réglage, ou à l'affichage d'un écran). */

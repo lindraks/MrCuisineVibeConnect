@@ -129,10 +129,14 @@ class MainActivity : Activity() {
         topBar.startClock()
         standby.start()
         unsubscribeHome = app.home.onChange { openSent() }
+        // Écran d'ambiance en veille quand quelqu'un est dans la cuisine (serveur maison).
+        unsubscribeAmbient = app.home.onAmbient { standby.setAmbient(it) }
+        standby.setAmbient(app.home.ambient)
         openSent()
     }
 
     private var unsubscribeHome: (() -> Unit)? = null
+    private var unsubscribeAmbient: (() -> Unit)? = null
 
     /**
      * Recette envoyée depuis le téléphone : ouverte ici, prête à lancer (rien ne démarre tout seul).
@@ -163,6 +167,8 @@ class MainActivity : Activity() {
         unsubscribeEvents?.invoke()
         unsubscribeHome?.invoke()
         unsubscribeHome = null
+        unsubscribeAmbient?.invoke()
+        unsubscribeAmbient = null
         topBar.stopClock()
         standby.stop()
         super.onStop()

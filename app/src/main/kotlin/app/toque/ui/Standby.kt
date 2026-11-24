@@ -30,6 +30,11 @@ class Standby(private val a: MainActivity, private val root: FrameLayout) {
     private var hot: TextView? = null
     private var running = false
     private var wokeMs = 0L
+    /** Écran d'ambiance (présence dans la cuisine, demandé par le serveur maison), par-dessus la veille. */
+    private var ambient: AmbientView? = null
+    private var ambientWanted = false
+    /** Plus personne : retour au noir après 2 min (on ne clignote pas à chaque pas hors du champ). */
+    private val ambientOff = Runnable { hideAmbient() }
 
     val asleep: Boolean get() = view != null
 
@@ -61,9 +66,43 @@ class Standby(private val a: MainActivity, private val root: FrameLayout) {
         wake()
     }
 
+    /** Présence dans la cuisine : en veille, l'écran d'ambiance s'affiche (luminosité réduite). */
+    fun setAmbient(on: Boolean) {
+        ambientWanted = on
+        if (on) {
+            main.removeCallbacks(ambientOff)
+            if (asleep) showAmbient()
+        } else if (ambient != null) {
+            main.removeCallbacks(ambientOff)
+            main.postDelayed(ambientOff, 120_000)
+        }
+    }
+
+    private fun showAmbient() {
+        if (ambient != null) return
+        val v = AmbientView(a)
+        root.addView(v, Ui.flp())
+        ambient = v
+        v.alpha = 0f
+        v.animate().alpha(1f).setDuration(600).start()
+        v.start()
+        brightness(AMBIENT_BRIGHTNESS)
+    }
+
+    private fun hideAmbient() {
+        val v = ambient ?: return
+        v.stop()
+        v.animate().cancel()
+        root.removeView(v)
+        ambient = null
+        if (asleep) brightness(0.02f)
+    }
+
     /** Un geste de la personne : repousse la veille. Vrai si ce geste a servi à réveiller (ne pas le transmettre). */
     fun onInput(): Boolean {
         lastInputMs = SystemClock.uptimeMillis()
+        // Écran d'ambiance : le toucher sert à ses actions ; c'est le bouton rotatif qui ramène à l'accueil.
+        if (ambient != null) return false
         if (!asleep) return false
         wake()
         wokeMs = SystemClock.uptimeMillis()
@@ -72,6 +111,12 @@ class Standby(private val a: MainActivity, private val root: FrameLayout) {
 
     /** Bouton rotatif : un tour envoie plusieurs crans, on ignore aussi ceux qui suivent le réveil. */
     fun onKnob(): Boolean {
+        if (ambient != null) {
+            lastInputMs = SystemClock.uptimeMillis()
+            wake()
+            wokeMs = SystemClock.uptimeMillis()
+            return true
+        }
         if (onInput()) return true
         return SystemClock.uptimeMillis() - wokeMs < 800
     }
@@ -126,9 +171,12 @@ class Standby(private val a: MainActivity, private val root: FrameLayout) {
             "off" -> KnobLight.start(0)
         }
         main.postDelayed(tick, 60_000)
+        if (ambientWanted) showAmbient()
     }
 
     private fun wake() {
+        main.removeCallbacks(ambientOff)
+        hideAmbient()
         val v = view ?: return
         main.removeCallbacks(tick)
         v.animate().cancel()
@@ -158,6 +206,11 @@ class Standby(private val a: MainActivity, private val root: FrameLayout) {
         val dy = ((v.height - b.height) / 2 - Ui.u(40)).coerceAtLeast(0)
         b.translationX = if (dx > 0) Random.nextInt(-dx, dx + 1).toFloat() else 0f
         b.translationY = if (dy > 0) Random.nextInt(-dy, dy + 1).toFloat() else 0f
+    }
+
+    private companion object {
+        /** Luminosité de l'écran d'ambiance : lisible sans éblouir. */
+        const val AMBIENT_BRIGHTNESS = 0.4f
     }
 
     private fun brightness(value: Float) {
