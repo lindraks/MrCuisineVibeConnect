@@ -30,6 +30,7 @@ import app.toque.core.machine.PauseReason
 import app.toque.core.machine.SafetyPolicy
 import app.toque.core.machine.Snapshot
 import app.toque.core.machine.Verdict
+import app.toque.core.recipes.Recipe
 import app.toque.recipes.LidlSync
 import app.toque.recipes.SyncService
 import app.toque.ui.screens.CookScreen
@@ -152,6 +153,13 @@ class MainActivity : Activity() {
         standby.poke()
         push(RecipeScreen(this, r, initialServings = s.servings))
         toast(tr("Recette envoyée depuis le téléphone"), Ui.OK)
+    }
+
+    /** Recette touchée sur l'écran d'ambiance : on revient au robot, recette ouverte (rien ne démarre). */
+    fun openFromAmbient(r: Recipe) {
+        standby.leaveAmbient()
+        if (snapshot.busy || current is CookScreen) return
+        push(RecipeScreen(this, r))
     }
 
     override fun onResume() {

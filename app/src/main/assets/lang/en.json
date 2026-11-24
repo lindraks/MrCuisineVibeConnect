@@ -534,5 +534,7 @@
   "Réglez d'abord l'adresse du serveur maison (Réglages › Recettes).": "First set the home server address (Settings › Recipes).",
   "Lumière de la cuisine à fond pour 20 min": "Kitchen light at full for 20 min",
   "Tournez le bouton pour cuisiner": "Turn the knob to cook",
-  "Action impossible : serveur maison injoignable": "Action failed: home server unreachable"
+  "Action impossible : serveur maison injoignable": "Action failed: home server unreachable",
+  "Vos playlists": "Your playlists",
+  "Lecture de « %s »": "Playing “%s”"
 }

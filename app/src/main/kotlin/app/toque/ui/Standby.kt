@@ -121,6 +121,13 @@ class Standby(private val a: MainActivity, private val root: FrameLayout) {
         return SystemClock.uptimeMillis() - wokeMs < 800
     }
 
+    /** Quitter l'écran d'ambiance (une recette touchée) : comme un tour de bouton. */
+    fun leaveAmbient() {
+        lastInputMs = SystemClock.uptimeMillis()
+        wake()
+        wokeMs = SystemClock.uptimeMillis()
+    }
+
     /** Quelque chose se passe sur le robot : on réveille et on repousse la veille. */
     fun poke() {
         lastInputMs = SystemClock.uptimeMillis()
