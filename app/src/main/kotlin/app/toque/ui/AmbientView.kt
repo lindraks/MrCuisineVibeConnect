@@ -282,7 +282,7 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
             val col = Ui.vertical(a)
             col.addView(Ui.ellipsize(Ui.text(a, now.str("titre").orEmpty(), 15f)))
             col.addView(Ui.ellipsize(Ui.text(a, now.str("artiste").orEmpty(), 13f, Ui.TEXT2)))
-            col.addView(ProgressLine(a, SPOTIFY).apply { progress = (now["progression"] as? Number)?.toFloat() ?: 0f },
+            col.addView(ProgressLine(a).apply { color = SPOTIFY; progress = (now["progression"] as? Number)?.toFloat() ?: 0f },
                 Ui.lp(Ui.MATCH, Ui.u(3), t = 6))
             r.addView(col, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
             val playing = now.bool("lecture") ?: false

@@ -212,24 +212,6 @@ class Gauge(context: Context) : View(context) {
     }
 }
 
-/** Barre de progression fine (lecture en cours). */
-class ProgressLine(context: Context, private val color: Int) : View(context) {
-    var progress = 0f
-        set(v) { field = v.coerceIn(0f, 1f); invalidate() }
-    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val rect = RectF()
-
-    override fun onDraw(canvas: Canvas) {
-        val h = height.toFloat()
-        p.color = 0x22FFFFFF
-        rect.set(0f, 0f, width.toFloat(), h)
-        canvas.drawRoundRect(rect, h / 2, h / 2, p)
-        p.color = color
-        rect.set(0f, 0f, width * progress, h)
-        canvas.drawRoundRect(rect, h / 2, h / 2, p)
-    }
-}
-
 /** Images servies par le serveur maison (pochettes) : petit cache en mémoire. */
 object RemoteImages {
     private val cache = LruCache<String, Bitmap>(24)
