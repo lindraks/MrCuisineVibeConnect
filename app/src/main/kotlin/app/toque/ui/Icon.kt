@@ -12,7 +12,7 @@ class Icon(context: Context, var kind: Kind, color: Int) : View(context) {
     enum class Kind {
         BACK, SEARCH, PLAY, PAUSE, STOP, THERMO, SPEED, CLOCK, REVERSE, SCALE, BOOK, STAR, STAR_FILLED,
         SETTINGS, PLUS, MINUS, CHECK, CLOSE, KNEAD, STEAM, FLAME, BOLT, SYNC, LID, WARNING, HOME, WHISK,
-        CHEVRON, LINK, INFO, POT, TIMER,
+        CHEVRON, LINK, INFO, POT, TIMER, BULB,
     }
 
     var color: Int = color
@@ -148,6 +148,13 @@ class Icon(context: Context, var kind: Kind, color: Int) : View(context) {
             }
             Kind.LINK -> { canvas.drawCircle(12f, 12f, 4f, fill); canvas.drawCircle(12f, 12f, 8.5f, stroke) }
             Kind.INFO -> { canvas.drawCircle(12f, 12f, 9f, stroke); canvas.drawLine(12f, 11f, 12f, 16.5f, stroke); canvas.drawCircle(12f, 7.8f, 1.2f, fill) }
+            Kind.BULB -> {
+                // Ampoule : globe, culot, deux traits de lumière.
+                p.moveTo(9f, 17f); p.cubicTo(9f, 14.5f, 6f, 13f, 6f, 9.5f); p.cubicTo(6f, 6f, 8.7f, 3.5f, 12f, 3.5f)
+                p.cubicTo(15.3f, 3.5f, 18f, 6f, 18f, 9.5f); p.cubicTo(18f, 13f, 15f, 14.5f, 15f, 17f); p.close()
+                canvas.drawPath(p, stroke)
+                canvas.drawLine(9.5f, 20f, 14.5f, 20f, stroke); canvas.drawLine(10.5f, 22f, 13.5f, 22f, stroke)
+            }
             Kind.POT -> {
                 rect.set(4f, 9f, 20f, 20f); canvas.drawRoundRect(rect, 3f, 3f, stroke)
                 canvas.drawLine(2f, 11f, 4f, 11f, stroke); canvas.drawLine(20f, 11f, 22f, 11f, stroke)

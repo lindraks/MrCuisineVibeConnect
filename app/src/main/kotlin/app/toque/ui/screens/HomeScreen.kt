@@ -122,7 +122,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         row1.addView(t1, tileLp(true))
         row1.addView(tile(Icon.Kind.POT, tr("Cuisson\nmanuelle"), hasSub = false) { a.push(ManualScreen(a)) }.first, tileLp(true))
         row1.addView(tile(Icon.Kind.KNEAD, tr("Programmes"), tr("Pétrir, vapeur, rissoler")) { a.push(ProgramsScreen(a)) }.first, tileLp(false))
-        row2.addView(tile(Icon.Kind.SCALE, tr("Balance"), tr("Peser au gramme")) { a.push(ScaleScreen(a)) }.first, tileLp(true))
+        // Remplace « Balance » (la pesée est dans la cuisson manuelle) : comme « Alexa, mets la lumière à 100 % ».
+        row2.addView(tile(Icon.Kind.BULB, tr("Lumière\ncuisine"), tr("Pleine lumière, 20 min")) { kitchenLight() }.first, tileLp(true))
         val (t5, s5) = tile(Icon.Kind.STAR, tr("Favoris")) { a.push(RecipesScreen(a, favorites = true)) }
         favSub = s5
         row2.addView(t5, tileLp(true))
@@ -213,6 +214,26 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         unsub?.invoke()
         unsubHome?.invoke()
         view.removeCallbacks(tick)
+    }
+
+    /** Lumière de la cuisine à 100 % par le serveur maison ; l'éclairage automatique reprend après 20 min. */
+    private fun kitchenLight() {
+        if (!HomeServer.configured(a.prefs)) {
+            a.toast(tr("Réglez d'abord l'adresse du serveur maison (Réglages › Recettes)."), Ui.WARN)
+            return
+        }
+        Thread {
+            val err = try {
+                HomeServer.call(a.prefs, "POST", "/api/maison/lumiere-cuisine")
+                null
+            } catch (e: Exception) {
+                e.message ?: e.javaClass.simpleName
+            }
+            view.post {
+                if (err == null) a.toast(tr("Lumière de la cuisine à fond pour 20 min"), Ui.OK)
+                else a.toast(tr("Serveur maison injoignable : %s", err), Ui.WARN)
+            }
+        }.start()
     }
 
     /** Retire la recette en cours de l'accueil (sans toucher à un programme qui tourne). */

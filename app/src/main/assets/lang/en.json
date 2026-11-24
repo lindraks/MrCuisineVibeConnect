@@ -314,7 +314,6 @@
   "Pause trop longue : programme annulé": "Paused too long: program cancelled",
   "Peser %d g": "Weigh %d g",
   "Peser %d g (recette : %d g)": "Weigh %d g (recipe: %d g)",
-  "Peser au gramme": "Weigh to the gram",
   "Pesez %d g": "Weigh %d g",
   "Pesez %d g (recette : %d g)": "Weigh %d g (recipe: %d g)",
   "Phase de durée nulle": "Phase with zero duration",
@@ -529,5 +528,9 @@
   "Courses": "Shopping",
   "Recette : %d g. Balance remise à zéro : mettez l'ingrédient dans le bol (Tare pour recommencer).": "Recipe: %d g. Scale reset to zero: put the ingredient in the bowl (Tare to start again).",
   "Au-delà de %d personnes, le bol risque d'être trop plein.": "Beyond %d people, the bowl may be too full.",
-  "Recette à %d %% : le bol risque d'être trop plein.": "Recipe at %d %%: the bowl may be too full."
+  "Recette à %d %% : le bol risque d'être trop plein.": "Recipe at %d %%: the bowl may be too full.",
+  "Lumière\ncuisine": "Kitchen\nlight",
+  "Pleine lumière, 20 min": "Full light, 20 min",
+  "Réglez d'abord l'adresse du serveur maison (Réglages › Recettes).": "First set the home server address (Settings › Recipes).",
+  "Lumière de la cuisine à fond pour 20 min": "Kitchen light at full for 20 min"
 }
