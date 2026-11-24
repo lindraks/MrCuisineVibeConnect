@@ -67,7 +67,7 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
         top.addView(date, Ui.lp(Ui.WRAP, Ui.WRAP, b = 8))
         left.addView(top)
         weather.background = Ui.round(Ui.SURFACE, 22f)
-        weather.setPadding(Ui.u(18), Ui.u(14), Ui.u(18), Ui.u(10))
+        weather.setPadding(Ui.u(18), Ui.u(12), Ui.u(18), Ui.u(8))
         left.addView(weather, LinearLayout.LayoutParams(Ui.MATCH, 0, 1f).apply { topMargin = Ui.u(8) })
         gauges.background = Ui.round(Ui.SURFACE, 22f)
         gauges.setPadding(Ui.u(8), Ui.u(6), Ui.u(8), Ui.u(6))
@@ -117,7 +117,7 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
         right.removeAllViews()
         d["menu"].obj().takeIf { it.isNotEmpty() }?.let { right.addView(menuCard(it), Ui.lp(b = 14)) }
         val music = d["musique"].obj()
-        if (music.isNotEmpty()) right.addView(musicCard(music), LinearLayout.LayoutParams(Ui.MATCH, 0, 1f).apply { bottomMargin = Ui.u(14) })
+        if (music.isNotEmpty()) right.addView(musicCard(music, if (right.childCount == 0) 2 else 1), LinearLayout.LayoutParams(Ui.MATCH, 0, 1f).apply { bottomMargin = Ui.u(14) })
         else right.addView(View(a), LinearLayout.LayoutParams(Ui.MATCH, 0, 1f))
         right.addView(bottomBar(d["alertes"].list().mapNotNull { it as? String }, d["actions"].list().map { it.obj() }))
     }
@@ -128,16 +128,16 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
         if (m.isEmpty()) return
         val now = Ui.horizontal(a)
         now.addView(WeatherIcon(a).apply { condition = m.str("cond").orEmpty(); night = m.bool("nuit") ?: false },
-            LinearLayout.LayoutParams(Ui.u(64), Ui.u(64)).apply { rightMargin = Ui.u(12) })
+            LinearLayout.LayoutParams(Ui.u(72), Ui.u(72)).apply { rightMargin = Ui.u(12) })
         val temp = SpannableStringBuilder(m.str("temp").orEmpty())
         val u0 = temp.length
         temp.append(m.str("unite").orEmpty())
-        temp.setSpan(AbsoluteSizeSpan(Ui.u(22)), u0, temp.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        temp.setSpan(AbsoluteSizeSpan(Ui.u(24)), u0, temp.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         temp.setSpan(android.text.style.SuperscriptSpan(), u0, temp.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        now.addView(Ui.text(a, temp, 50f, Ui.TEXT, Ui.LIGHT), Ui.lp(Ui.WRAP, Ui.WRAP, r = 16))
+        now.addView(Ui.text(a, temp, 56f, Ui.TEXT, Ui.LIGHT), Ui.lp(Ui.WRAP, Ui.WRAP, r = 16))
         val col = Ui.vertical(a)
-        col.addView(Ui.ellipsize(Ui.text(a, m.str("texte").orEmpty(), 20f)))
-        col.addView(Ui.ellipsize(Ui.text(a, m.str("detail").orEmpty(), 15f, Ui.TEXT2)), Ui.lp(t = 3))
+        col.addView(Ui.ellipsize(Ui.text(a, m.str("texte").orEmpty(), 23f)))
+        col.addView(Ui.ellipsize(Ui.text(a, m.str("detail").orEmpty(), 17f, Ui.TEXT2)), Ui.lp(t = 3))
         now.addView(col, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
         val attrs = Ui.vertical(a, Gravity.END)
         for (p in m["attributs"].list()) {
@@ -147,12 +147,12 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
             val k = s.length
             s.append(kv[1])
             s.setSpan(ForegroundColorSpan(Ui.TEXT), k, s.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            attrs.addView(Ui.text(a, s, 15f, Ui.TEXT2).apply { gravity = Gravity.END }, Ui.lp(Ui.WRAP, Ui.WRAP, t = 2))
+            attrs.addView(Ui.text(a, s, 17f, Ui.TEXT2).apply { gravity = Gravity.END }, Ui.lp(Ui.WRAP, Ui.WRAP, t = 2))
         }
         now.addView(attrs)
         weather.addView(now)
         m.str("resume")?.takeIf { it.isNotEmpty() }?.let {
-            weather.addView(Ui.ellipsize(Ui.text(a, it, 15f, if (m.bool("resumeAlerte") == true) Ui.WARN else WeatherIcon.RAIN)), Ui.lp(t = 10))
+            weather.addView(Ui.ellipsize(Ui.text(a, it, 18f, if (m.bool("resumeAlerte") == true) Ui.WARN else WeatherIcon.RAIN)), Ui.lp(t = 10))
         }
         weather.addView(View(a), LinearLayout.LayoutParams(Ui.MATCH, 0, 1f))
         val hours = m["heures"].list().map { it.obj() }
@@ -161,14 +161,14 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
             val r = Ui.horizontal(a, Gravity.TOP)
             for (h in hours) {
                 val c = Ui.vertical(a, Gravity.CENTER_HORIZONTAL)
-                c.addView(Ui.text(a, h.str("h").orEmpty(), 14f, Ui.TEXT2))
+                c.addView(ctext(h.str("h").orEmpty(), 17f, Ui.TEXT2))
                 c.addView(WeatherIcon(a).apply { condition = h.str("cond").orEmpty(); night = h.bool("nuit") ?: false },
-                    LinearLayout.LayoutParams(Ui.u(32), Ui.u(32)).apply { topMargin = Ui.u(3); bottomMargin = Ui.u(2) })
-                c.addView(Ui.text(a, h.str("t").orEmpty(), 17f))
-                c.addView(Ui.text(a, h.str("mm").orEmpty(), 12f, WeatherIcon.RAIN), Ui.lp(Ui.WRAP, Ui.u(16)))
+                    LinearLayout.LayoutParams(Ui.u(46), Ui.u(46)).apply { topMargin = Ui.u(4); bottomMargin = Ui.u(2) })
+                c.addView(ctext(h.str("t").orEmpty(), 21f, Ui.TEXT))
+                c.addView(ctext(h.str("mm").orEmpty(), 14f, WeatherIcon.RAIN), Ui.lp(Ui.MATCH, Ui.u(19)))
                 r.addView(c, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
             }
-            weather.addView(r, Ui.lp(t = 8, b = 6))
+            weather.addView(r, Ui.lp(t = 10, b = 8))
         }
         weather.addView(View(a), LinearLayout.LayoutParams(Ui.MATCH, 0, 1f))
         val days = m["jours"].list().map { it.obj() }
@@ -177,18 +177,18 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
             val r = Ui.horizontal(a, Gravity.TOP)
             for (j in days) {
                 val c = Ui.vertical(a, Gravity.CENTER_HORIZONTAL)
-                c.addView(Ui.text(a, j.str("j").orEmpty(), 14f, Ui.TEXT2))
+                c.addView(ctext(j.str("j").orEmpty(), 17f, Ui.TEXT2))
                 c.addView(WeatherIcon(a).apply { condition = j.str("cond").orEmpty() },
-                    LinearLayout.LayoutParams(Ui.u(34), Ui.u(34)).apply { topMargin = Ui.u(2) })
+                    LinearLayout.LayoutParams(Ui.u(50), Ui.u(50)).apply { topMargin = Ui.u(2) })
                 val s = SpannableStringBuilder(j.str("max").orEmpty() + "  ")
                 val k = s.length
                 s.append(j.str("min").orEmpty())
                 s.setSpan(ForegroundColorSpan(Ui.TEXT3), k, s.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                c.addView(Ui.text(a, s, 16f))
-                c.addView(Ui.text(a, j.str("mm").orEmpty(), 12f, WeatherIcon.RAIN), Ui.lp(Ui.WRAP, Ui.u(16)))
+                c.addView(ctext(s, 20f, Ui.TEXT))
+                c.addView(ctext(j.str("mm").orEmpty(), 14f, WeatherIcon.RAIN), Ui.lp(Ui.MATCH, Ui.u(19)))
                 r.addView(c, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
             }
-            weather.addView(r, Ui.lp(t = 8))
+            weather.addView(r, Ui.lp(t = 10))
         }
     }
 
@@ -204,8 +204,8 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
                 value = (g["valeur"] as? Number)?.toFloat() ?: 0f
                 label = g.str("texte").orEmpty()
                 unit = g.str("unite").orEmpty()
-            }, LinearLayout.LayoutParams(Ui.u(80), Ui.u(68)))
-            c.addView(Ui.ellipsize(Ui.text(a, g.str("nom").orEmpty(), 14f, Ui.TEXT2).apply { gravity = Gravity.CENTER }),
+            }, LinearLayout.LayoutParams(Ui.u(86), Ui.u(72)))
+            c.addView(Ui.ellipsize(Ui.text(a, g.str("nom").orEmpty(), 16f, Ui.TEXT2).apply { gravity = Gravity.CENTER }),
                 LinearLayout.LayoutParams(Ui.MATCH, Ui.WRAP).apply { topMargin = -Ui.u(10) })
             gauges.addView(c, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
         }
@@ -240,67 +240,88 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
     }
 
     // ------------------------------------------------------------------ musique
-    private fun musicCard(m: Map<String, Any?>): View {
+    private fun musicCard(m: Map<String, Any?>, rows: Int): View {
         val base = HomeServer.baseUrl(a.prefs.homeServer).orEmpty()
         fun url(p: String?) = p?.let { if (it.startsWith("/")) base + it else it }
         val card = Ui.vertical(a)
         card.background = Ui.round(Ui.SURFACE, 22f)
-        card.setPadding(Ui.u(18), Ui.u(16), Ui.u(18), Ui.u(12))
+        card.setPadding(Ui.u(16), Ui.u(14), Ui.u(16), Ui.u(12))
         val head = Ui.horizontal(a)
         head.addView(label(tr("Vos playlists")), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
-        head.addView(Ui.text(a, m.str("source").orEmpty(), 13f, Ui.TEXT3))
+        head.addView(Ui.text(a, m.str("source").orEmpty(), 14f, Ui.TEXT3))
         card.addView(head)
-        val grid = Ui.horizontal(a, Gravity.TOP)
-        val lists = m["listes"].list().map { it.obj() }.take(3)
+        // Pochettes en colonnes de [rows] ; on fait défiler de côté pour voir les suivantes.
+        val strip = Ui.horizontal(a, Gravity.TOP)
+        val lists = m["listes"].list().map { it.obj() }
+        val size = Ui.u(if (rows > 1) 100 else 104)
+        var column: LinearLayout? = null
         for ((k, p) in lists.withIndex()) {
+            if (k % rows == 0) {
+                column = Ui.vertical(a)
+                strip.addView(column, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
+            }
             val c = Ui.vertical(a)
             val box = FrameLayout(a)
             val img = ImageView(a).apply { scaleType = ImageView.ScaleType.CENTER_CROP; rounded(this, 12f); background = Ui.round(Ui.SURFACE2, 12f) }
             RemoteImages.load(img, url(p.str("image")))
             box.addView(img, FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH))
             val play = FrameLayout(a)
-            play.background = Ui.round(SPOTIFY, 15f)
-            play.addView(Icon(a, Icon.Kind.PLAY, Ui.BG), FrameLayout.LayoutParams(Ui.u(13), Ui.u(13), Gravity.CENTER))
-            box.addView(play, FrameLayout.LayoutParams(Ui.u(30), Ui.u(30), Gravity.BOTTOM or Gravity.END).apply { rightMargin = Ui.u(6); bottomMargin = Ui.u(6) })
-            c.addView(box, LinearLayout.LayoutParams(Ui.u(104), Ui.u(104)))
-            c.addView(Ui.ellipsize(Ui.text(a, p.str("nom").orEmpty(), 14f)), Ui.lp(Ui.u(104), Ui.WRAP, t = 6))
+            play.background = Ui.round(SPOTIFY, 16f)
+            play.addView(Icon(a, Icon.Kind.PLAY, Ui.BG), FrameLayout.LayoutParams(Ui.u(14), Ui.u(14), Gravity.CENTER))
+            box.addView(play, FrameLayout.LayoutParams(Ui.u(32), Ui.u(32), Gravity.BOTTOM or Gravity.END).apply { rightMargin = Ui.u(6); bottomMargin = Ui.u(6) })
+            c.addView(box, LinearLayout.LayoutParams(size, size))
+            c.addView(Ui.ellipsize(Ui.text(a, p.str("nom").orEmpty(), 16f)), LinearLayout.LayoutParams(size, Ui.WRAP).apply { topMargin = Ui.u(5) })
             val id = p.str("id").orEmpty()
             c.isClickable = true
             c.setOnClickListener { a.toast(tr("Lecture de « %s »", p.str("nom").orEmpty()), Ui.OK); act("musique:jouer:$id") }
-            grid.addView(c, LinearLayout.LayoutParams(0, Ui.WRAP, 1f).apply { if (k < 2) rightMargin = Ui.u(10) })
+            column!!.addView(c, Ui.lp(Ui.WRAP, Ui.WRAP, b = if (rows > 1 && k % rows == 0) 10 else 0))
         }
-        card.addView(grid, Ui.lp(t = 12))
+        val scroller = android.widget.HorizontalScrollView(a).apply { isHorizontalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER }
+        scroller.addView(strip)
+        card.addView(scroller, Ui.lp(t = 10))
         card.addView(View(a), LinearLayout.LayoutParams(Ui.MATCH, 0, 1f))
         val now = m["enCours"].obj()
         if (now.isNotEmpty()) {
+            val box = Ui.vertical(a)
+            box.background = Ui.round(Ui.SURFACE2, 16f)
+            box.setPadding(Ui.u(10), Ui.u(10), Ui.u(10), Ui.u(10))
             val r = Ui.horizontal(a)
-            r.background = Ui.round(Ui.SURFACE2, 14f)
-            r.setPadding(Ui.u(8), Ui.u(8), Ui.u(8), Ui.u(8))
-            val img = ImageView(a).apply { scaleType = ImageView.ScaleType.CENTER_CROP; rounded(this, 8f) }
+            val img = ImageView(a).apply { scaleType = ImageView.ScaleType.CENTER_CROP; rounded(this, 10f) }
             RemoteImages.load(img, url(now.str("image")))
-            r.addView(img, LinearLayout.LayoutParams(Ui.u(48), Ui.u(48)).apply { rightMargin = Ui.u(12) })
+            r.addView(img, LinearLayout.LayoutParams(Ui.u(60), Ui.u(60)).apply { rightMargin = Ui.u(12) })
             val col = Ui.vertical(a)
-            col.addView(Ui.ellipsize(Ui.text(a, now.str("titre").orEmpty(), 15f)))
-            col.addView(Ui.ellipsize(Ui.text(a, now.str("artiste").orEmpty(), 13f, Ui.TEXT2)))
+            col.addView(Ui.ellipsize(Ui.text(a, now.str("titre").orEmpty(), 19f)))
+            col.addView(Ui.ellipsize(Ui.text(a, now.str("artiste").orEmpty(), 16f, Ui.TEXT2)))
             col.addView(ProgressLine(a).apply { color = SPOTIFY; progress = (now["progression"] as? Number)?.toFloat() ?: 0f },
-                Ui.lp(Ui.MATCH, Ui.u(3), t = 6))
+                Ui.lp(Ui.MATCH, Ui.u(4), t = 7))
             r.addView(col, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+            box.addView(r)
             val playing = now.bool("lecture") ?: false
-            r.addView(round(if (playing) Icon.Kind.PAUSE else Icon.Kind.PLAY) { act(if (playing) "musique:pause" else "musique:reprendre") },
-                LinearLayout.LayoutParams(Ui.u(44), Ui.u(44)).apply { leftMargin = Ui.u(10) })
-            r.addView(round(Icon.Kind.NEXT) { act("musique:suivant") }, LinearLayout.LayoutParams(Ui.u(44), Ui.u(44)).apply { leftMargin = Ui.u(10) })
-            card.addView(r)
+            val ctl = Ui.horizontal(a, Gravity.CENTER)
+            val volume = now["volume"] as? Number
+            if (volume != null) ctl.addView(round(Icon.Kind.MINUS, 52) { act("musique:volume:-10") })
+            ctl.addView(View(a), LinearLayout.LayoutParams(0, 1, 1f))
+            ctl.addView(round(Icon.Kind.PREV, 52) { act("musique:precedent") })
+            ctl.addView(round(if (playing) Icon.Kind.PAUSE else Icon.Kind.PLAY, 60, SPOTIFY) { act(if (playing) "musique:pause" else "musique:reprendre") },
+                LinearLayout.LayoutParams(Ui.u(60), Ui.u(60)).apply { leftMargin = Ui.u(14); rightMargin = Ui.u(14) })
+            ctl.addView(round(Icon.Kind.NEXT, 52) { act("musique:suivant") })
+            ctl.addView(View(a), LinearLayout.LayoutParams(0, 1, 1f))
+            if (volume != null) ctl.addView(round(Icon.Kind.PLUS, 52) { act("musique:volume:10") })
+            box.addView(ctl, Ui.lp(t = 10))
+            card.addView(box)
         }
-        m.str("appareil")?.takeIf { it.isNotEmpty() }?.let { card.addView(Ui.ellipsize(Ui.text(a, it, 13f, Ui.TEXT2)), Ui.lp(t = 8)) }
+        val dev = m.str("appareil").orEmpty() + ((now["volume"] as? Number)?.let { " · volume ${it.toInt()} %" } ?: "")
+        if (dev.isNotEmpty()) card.addView(Ui.ellipsize(Ui.text(a, dev, 15f, Ui.TEXT2)), Ui.lp(t = 8))
         return card
     }
 
-    private fun round(kind: Icon.Kind, onClick: () -> Unit): View {
+    private fun round(kind: Icon.Kind, size: Int, bg: Int = 0x14FFFFFF, onClick: () -> Unit): View {
         val b = FrameLayout(a)
-        b.background = Ui.pressable(Ui.round(0x10FFFFFF, 22f), 22f)
-        b.addView(Icon(a, kind, Ui.TEXT), FrameLayout.LayoutParams(Ui.u(22), Ui.u(22), Gravity.CENTER))
+        b.background = Ui.pressable(Ui.round(bg, size / 2f), size / 2f)
+        b.addView(Icon(a, kind, if (bg == SPOTIFY) Ui.BG else Ui.TEXT), FrameLayout.LayoutParams(Ui.u(size * 0.45f), Ui.u(size * 0.45f), Gravity.CENTER))
         b.isClickable = true
         b.setOnClickListener { onClick() }
+        b.layoutParams = LinearLayout.LayoutParams(Ui.u(size), Ui.u(size))
         return b
     }
 
@@ -324,7 +345,9 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
         return bar
     }
 
-    private fun label(s: String) = Ui.text(a, s.uppercase(), 13f, Ui.TEXT2, Ui.MEDIUM).apply { letterSpacing = 0.09f }
+    private fun ctext(s: CharSequence, size: Float, color: Int) = Ui.text(a, s, size, color).apply { gravity = Gravity.CENTER_HORIZONTAL }
+
+    private fun label(s: String) = Ui.text(a, s.uppercase(), 14f, Ui.TEXT2, Ui.MEDIUM).apply { letterSpacing = 0.09f }
 
     private fun rounded(v: View, r: Float) {
         v.outlineProvider = object : ViewOutlineProvider() {

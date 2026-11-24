@@ -35,6 +35,7 @@ class Standby(private val a: MainActivity, private val root: FrameLayout) {
     private var ambientWanted = false
     /** Plus personne : retour au noir après 2 min (on ne clignote pas à chaque pas hors du champ). */
     private val ambientOff = Runnable { hideAmbient() }
+    private val ambientDim = Runnable { if (ambient != null) brightness(AMBIENT_BRIGHTNESS) }
 
     val asleep: Boolean get() = view != null
 
@@ -90,6 +91,7 @@ class Standby(private val a: MainActivity, private val root: FrameLayout) {
     }
 
     private fun hideAmbient() {
+        main.removeCallbacks(ambientDim)
         val v = ambient ?: return
         v.stop()
         v.animate().cancel()
@@ -101,8 +103,14 @@ class Standby(private val a: MainActivity, private val root: FrameLayout) {
     /** Un geste de la personne : repousse la veille. Vrai si ce geste a servi à réveiller (ne pas le transmettre). */
     fun onInput(): Boolean {
         lastInputMs = SystemClock.uptimeMillis()
-        // Écran d'ambiance : le toucher sert à ses actions ; c'est le bouton rotatif qui ramène à l'accueil.
-        if (ambient != null) return false
+        // Écran d'ambiance : le toucher sert à ses actions (et rallume l'écran à fond 30 s) ;
+        // c'est le bouton rotatif qui ramène à l'accueil.
+        if (ambient != null) {
+            brightness(1f)
+            main.removeCallbacks(ambientDim)
+            main.postDelayed(ambientDim, 30_000)
+            return false
+        }
         if (!asleep) return false
         wake()
         wokeMs = SystemClock.uptimeMillis()

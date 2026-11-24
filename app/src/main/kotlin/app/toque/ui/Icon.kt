@@ -12,7 +12,7 @@ class Icon(context: Context, var kind: Kind, color: Int) : View(context) {
     enum class Kind {
         BACK, SEARCH, PLAY, PAUSE, STOP, THERMO, SPEED, CLOCK, REVERSE, SCALE, BOOK, STAR, STAR_FILLED,
         SETTINGS, PLUS, MINUS, CHECK, CLOSE, KNEAD, STEAM, FLAME, BOLT, SYNC, LID, WARNING, HOME, WHISK,
-        CHEVRON, LINK, INFO, POT, TIMER, BULB, NEXT,
+        CHEVRON, LINK, INFO, POT, TIMER, BULB, NEXT, PREV,
     }
 
     var color: Int = color
@@ -158,6 +158,10 @@ class Icon(context: Context, var kind: Kind, color: Int) : View(context) {
             Kind.NEXT -> {
                 p.moveTo(5f, 5f); p.lineTo(15f, 12f); p.lineTo(5f, 19f); p.close(); canvas.drawPath(p, fill)
                 rect.set(16f, 5f, 19f, 19f); canvas.drawRoundRect(rect, 1f, 1f, fill)
+            }
+            Kind.PREV -> {
+                p.moveTo(19f, 5f); p.lineTo(9f, 12f); p.lineTo(19f, 19f); p.close(); canvas.drawPath(p, fill)
+                rect.set(5f, 5f, 8f, 19f); canvas.drawRoundRect(rect, 1f, 1f, fill)
             }
             Kind.POT -> {
                 rect.set(4f, 9f, 20f, 20f); canvas.drawRoundRect(rect, 3f, 3f, stroke)
