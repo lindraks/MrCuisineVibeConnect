@@ -54,6 +54,7 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
             handler.postDelayed(this, 10_000)
         }
     }
+    private var onHome = false
     private var adminTaps = 0
     private var adminFirst = 0L
 
@@ -64,7 +65,7 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
         // Transparente : le dégradé du fond passe aussi derrière la barre du haut.
         back.setPadding(Ui.u(10), Ui.u(10), Ui.u(10), Ui.u(10))
         back.background = Ui.pressable(Ui.round(0, 30f), 30f)
-        back.setOnClickListener { a.back() }
+        back.setOnClickListener { if (onHome) a.showDashboard() else a.back() }
         addView(back, LayoutParams(Ui.u(52), Ui.u(52)))
         addView(titleView, LayoutParams(0, Ui.WRAP, 1f).apply { leftMargin = Ui.u(6) })
         addView(lid, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
@@ -97,7 +98,11 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
 
     fun setTitle(t: String, canGoBack: Boolean) {
         titleView.text = t
-        back.visibility = if (canGoBack) View.VISIBLE else View.INVISIBLE
+        // Accueil : à la place du retour, l'accès au tableau de bord de la maison.
+        onHome = !canGoBack
+        back.set(if (onHome) Icon.Kind.DASHBOARD else Icon.Kind.BACK)
+        back.color = if (onHome) Ui.TEXT2 else Ui.TEXT
+        back.visibility = if (canGoBack || a.hasDashboard()) View.VISIBLE else View.INVISIBLE
         home.visibility = if (canGoBack) View.VISIBLE else View.GONE
     }
 

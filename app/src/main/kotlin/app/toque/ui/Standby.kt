@@ -97,7 +97,7 @@ class Standby(private val a: MainActivity, private val root: FrameLayout) {
         v.animate().cancel()
         root.removeView(v)
         ambient = null
-        if (asleep) brightness(0.02f)
+        brightness(if (asleep) 0.02f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
     }
 
     /** Un geste de la personne : repousse la veille. Vrai si ce geste a servi à réveiller (ne pas le transmettre). */
@@ -138,6 +138,9 @@ class Standby(private val a: MainActivity, private val root: FrameLayout) {
 
     /** Quelque chose se passe sur le robot : on réveille et on repousse la veille. */
     fun poke() {
+        // Sur l'écran d'ambiance, seul le bouton rotatif (ou un programme en cours) ramène au robot :
+        // poser quelque chose sur la balance ou toucher le couvercle ne doit pas le quitter.
+        if (ambient != null && !a.snapshot.busy) return
         lastInputMs = SystemClock.uptimeMillis()
         wake()
     }
@@ -186,7 +189,15 @@ class Standby(private val a: MainActivity, private val root: FrameLayout) {
             "off" -> KnobLight.start(0)
         }
         main.postDelayed(tick, 60_000)
-        if (ambientWanted) showAmbient()
+        // Tableau de bord ouvert à la main : il reste au-dessus si quelqu'un est là, sinon il s'efface.
+        if (ambientWanted) showAmbient() else hideAmbient()
+        ambient?.let { it.bringToFront(); brightness(AMBIENT_BRIGHTNESS) }
+    }
+
+    /** Ouvert depuis l'accueil (bouton en haut à gauche) ; le bouton rotatif ramène à l'accueil. */
+    fun showDashboard() {
+        lastInputMs = SystemClock.uptimeMillis()
+        showAmbient()
     }
 
     private fun wake() {

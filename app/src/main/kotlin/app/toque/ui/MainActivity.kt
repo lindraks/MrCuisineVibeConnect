@@ -31,6 +31,7 @@ import app.toque.core.machine.SafetyPolicy
 import app.toque.core.machine.Snapshot
 import app.toque.core.machine.Verdict
 import app.toque.core.recipes.Recipe
+import app.toque.recipes.HomeServer
 import app.toque.recipes.LidlSync
 import app.toque.recipes.SyncService
 import app.toque.ui.screens.CookScreen
@@ -150,10 +151,15 @@ class MainActivity : Activity() {
         prefs.lastSentAt = s.at
         app.home.ackSent(s.at)
         val r = app.recipes.get(s.id) ?: return
-        standby.poke()
+        standby.leaveAmbient()
         push(RecipeScreen(this, r, initialServings = s.servings))
         toast(tr("Recette envoyée depuis le téléphone"), Ui.OK)
     }
+
+    /** Tableau de bord de la maison, depuis l'accueil (seulement avec un serveur maison réglé). */
+    fun showDashboard() = standby.showDashboard()
+
+    fun hasDashboard(): Boolean = HomeServer.configured(prefs)
 
     /** Recette touchée sur l'écran d'ambiance : on revient au robot, recette ouverte (rien ne démarre). */
     fun openFromAmbient(r: Recipe) {
