@@ -112,7 +112,7 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
                 if (!ok) a.toast(tr("Action impossible : serveur maison injoignable"), Ui.WARN)
                 // Relectures rapprochées : le serveur renvoie tout de suite l'état demandé (volume,
                 // pause), Spotify met ensuite une à trois secondes pour changer de morceau.
-                for (ms in longArrayOf(150, 1_500, 4_000)) main.postDelayed({ if (alive) load() }, ms)
+                for (ms in longArrayOf(150, 1_500, 4_000, 8_000)) main.postDelayed({ if (alive) load() }, ms)
             }
         }.start()
     }
@@ -124,7 +124,7 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
         right.removeAllViews()
         d["menu"].obj().takeIf { it.isNotEmpty() }?.let { right.addView(menuCard(it), Ui.lp(b = 14)) }
         val music = d["musique"].obj()
-        if (music.isNotEmpty()) right.addView(musicCard(music, if (right.childCount == 0) 2 else 1), LinearLayout.LayoutParams(Ui.MATCH, 0, 1f).apply { bottomMargin = Ui.u(14) })
+        if (music.isNotEmpty()) right.addView(musicCard(music, compact = right.childCount > 0), LinearLayout.LayoutParams(Ui.MATCH, 0, 1f).apply { bottomMargin = Ui.u(14) })
         else right.addView(View(a), LinearLayout.LayoutParams(Ui.MATCH, 0, 1f))
         right.addView(bottomBar(d["alertes"].list().mapNotNull { it as? String }, d["actions"].list().map { it.obj() }))
     }
@@ -271,7 +271,9 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
     }
 
     // ------------------------------------------------------------------ musique
-    private fun musicCard(m: Map<String, Any?>, rows: Int): View {
+    /** [compact] : une recette du jour occupe déjà le haut de la colonne, tout doit tenir en moins de place. */
+    private fun musicCard(m: Map<String, Any?>, compact: Boolean): View {
+        val rows = 1
         val base = HomeServer.baseUrl(a.prefs.homeServer).orEmpty()
         fun url(p: String?) = p?.let { if (it.startsWith("/")) base + it else it }
         val card = Ui.vertical(a)
@@ -279,12 +281,21 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
         card.setPadding(Ui.u(16), Ui.u(14), Ui.u(16), Ui.u(12))
         val head = Ui.horizontal(a)
         head.addView(label(tr("Vos playlists")), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
-        head.addView(Ui.text(a, m.str("source").orEmpty(), 14f, Ui.TEXT3))
+        val volume = m["volume"] as? Number
+        if (volume != null) {
+            // Volume toujours à portée, même avant que la lecture ne soit signalée.
+            head.addView(round(Icon.Kind.MINUS, 40) { act("musique:volume:-10") })
+            head.addView(Ui.text(a, "${volume.toInt()} %", 15f, Ui.TEXT2).apply { gravity = Gravity.CENTER },
+                LinearLayout.LayoutParams(Ui.u(52), Ui.WRAP))
+            head.addView(round(Icon.Kind.PLUS, 40) { act("musique:volume:10") })
+        } else {
+            head.addView(Ui.text(a, m.str("source").orEmpty(), 14f, Ui.TEXT3))
+        }
         card.addView(head)
         // Pochettes en colonnes de [rows] ; on fait défiler de côté pour voir les suivantes.
         val strip = Ui.horizontal(a, Gravity.TOP)
         val lists = m["listes"].list().map { it.obj() }
-        val size = Ui.u(if (rows > 1) 100 else 104)
+        val size = Ui.u(if (compact) 84 else 104)
         var column: LinearLayout? = null
         for ((k, p) in lists.withIndex()) {
             if (k % rows == 0) {
@@ -310,16 +321,23 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
         val scroller = android.widget.HorizontalScrollView(a).apply { isHorizontalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER }
         scroller.addView(strip)
         card.addView(scroller, Ui.lp(t = 10))
+        val shortcuts = m["raccourcis"].list().map { it.obj() }.take(2)
+        if (shortcuts.isNotEmpty()) {
+            val row = Ui.horizontal(a)
+            for ((k, r) in shortcuts.withIndex()) row.addView(shortcut(r, ::url), LinearLayout.LayoutParams(0, Ui.u(68), 1f).apply { if (k == 0) rightMargin = Ui.u(10) })
+            card.addView(row, Ui.lp(t = 12))
+        }
         card.addView(View(a), LinearLayout.LayoutParams(Ui.MATCH, 0, 1f))
         val now = m["enCours"].obj()
         if (now.isNotEmpty()) {
             val box = Ui.vertical(a)
             box.background = Ui.round(Ui.SURFACE2, 16f)
             box.setPadding(Ui.u(10), Ui.u(10), Ui.u(10), Ui.u(10))
+            if (compact) box.setPadding(Ui.u(8), Ui.u(8), Ui.u(8), Ui.u(8))
             val r = Ui.horizontal(a)
             val img = ImageView(a).apply { scaleType = ImageView.ScaleType.CENTER_CROP; rounded(this, 10f) }
             RemoteImages.load(img, url(now.str("image")))
-            r.addView(img, LinearLayout.LayoutParams(Ui.u(60), Ui.u(60)).apply { rightMargin = Ui.u(12) })
+            r.addView(img, LinearLayout.LayoutParams(Ui.u(if (compact) 48 else 60), Ui.u(if (compact) 48 else 60)).apply { rightMargin = Ui.u(12) })
             val col = Ui.vertical(a)
             col.addView(Ui.ellipsize(Ui.text(a, now.str("titre").orEmpty(), 19f)))
             col.addView(Ui.ellipsize(Ui.text(a, now.str("artiste").orEmpty(), 16f, Ui.TEXT2)))
@@ -328,22 +346,68 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
             r.addView(col, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
             box.addView(r)
             val playing = now.bool("lecture") ?: false
+            if (compact) {
+                // Une seule ligne : précédent / lecture / suivant à droite du titre.
+                r.addView(round(Icon.Kind.PREV, 44) { act("musique:precedent") }, LinearLayout.LayoutParams(Ui.u(44), Ui.u(44)).apply { leftMargin = Ui.u(8) })
+                r.addView(round(if (playing) Icon.Kind.PAUSE else Icon.Kind.PLAY, 48, SPOTIFY) { act(if (playing) "musique:pause" else "musique:reprendre") },
+                    LinearLayout.LayoutParams(Ui.u(48), Ui.u(48)).apply { leftMargin = Ui.u(8) })
+                r.addView(round(Icon.Kind.NEXT, 44) { act("musique:suivant") }, LinearLayout.LayoutParams(Ui.u(44), Ui.u(44)).apply { leftMargin = Ui.u(8) })
+                card.addView(box)
+            }
             val ctl = Ui.horizontal(a, Gravity.CENTER)
-            val volume = now["volume"] as? Number
-            if (volume != null) ctl.addView(round(Icon.Kind.MINUS, 52) { act("musique:volume:-10") })
             ctl.addView(View(a), LinearLayout.LayoutParams(0, 1, 1f))
             ctl.addView(round(Icon.Kind.PREV, 52) { act("musique:precedent") })
             ctl.addView(round(if (playing) Icon.Kind.PAUSE else Icon.Kind.PLAY, 60, SPOTIFY) { act(if (playing) "musique:pause" else "musique:reprendre") },
                 LinearLayout.LayoutParams(Ui.u(60), Ui.u(60)).apply { leftMargin = Ui.u(14); rightMargin = Ui.u(14) })
             ctl.addView(round(Icon.Kind.NEXT, 52) { act("musique:suivant") })
             ctl.addView(View(a), LinearLayout.LayoutParams(0, 1, 1f))
-            if (volume != null) ctl.addView(round(Icon.Kind.PLUS, 52) { act("musique:volume:10") })
-            box.addView(ctl, Ui.lp(t = 10))
-            card.addView(box)
+            if (!compact) {
+                box.addView(ctl, Ui.lp(t = 10))
+                card.addView(box)
+            }
         }
-        val dev = m.str("appareil").orEmpty() + ((now["volume"] as? Number)?.let { " · volume ${it.toInt()} %" } ?: "")
+        val dev = m.str("appareil").orEmpty()
         if (dev.isNotEmpty()) card.addView(Ui.ellipsize(Ui.text(a, dev, 15f, Ui.TEXT2)), Ui.lp(t = 8))
         return card
+    }
+
+    /** Raccourci audio (radio en direct, dernier épisode d'un podcast) : vignette et deux lignes. */
+    private fun shortcut(r: Map<String, Any?>, url: (String?) -> String?): View {
+        val off = r.bool("inactif") ?: false
+        val tile = Ui.horizontal(a)
+        tile.background = Ui.pressable(Ui.round(Ui.SURFACE2, 16f), 16f)
+        tile.setPadding(Ui.u(8), Ui.u(8), Ui.u(10), Ui.u(8))
+        val col = try { android.graphics.Color.parseColor(r.str("couleur")) } catch (_: Exception) { Ui.SURFACE3 }
+        val thumb = FrameLayout(a)
+        thumb.background = Ui.round(col, 10f)
+        val image = url(r.str("image"))
+        if (image != null) {
+            val img = ImageView(a).apply { scaleType = ImageView.ScaleType.CENTER_CROP; rounded(this, 10f) }
+            RemoteImages.load(img, image)
+            thumb.addView(img, FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH))
+        } else {
+            thumb.addView(Ui.text(a, r.str("sigle").orEmpty(), 15f, android.graphics.Color.WHITE, Ui.BOLD).apply { gravity = Gravity.CENTER },
+                FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH))
+        }
+        thumb.addView(FrameLayout(a).apply {
+            background = Ui.round(SPOTIFY, 11f)
+            addView(Icon(a, Icon.Kind.PLAY, Ui.BG), FrameLayout.LayoutParams(Ui.u(10), Ui.u(10), Gravity.CENTER))
+        }, FrameLayout.LayoutParams(Ui.u(22), Ui.u(22), Gravity.BOTTOM or Gravity.END).apply { rightMargin = -Ui.u(4); bottomMargin = -Ui.u(4) })
+        thumb.clipChildren = false
+        tile.clipChildren = false
+        tile.addView(thumb, LinearLayout.LayoutParams(Ui.u(52), Ui.u(52)).apply { rightMargin = Ui.u(12) })
+        val txt = Ui.vertical(a)
+        txt.addView(Ui.ellipsize(Ui.text(a, r.str("nom").orEmpty(), 16f, Ui.TEXT, Ui.MEDIUM)))
+        txt.addView(Ui.ellipsize(Ui.text(a, r.str("sous").orEmpty(), 13f, if (off) Ui.WARN else Ui.TEXT2)), Ui.lp(t = 2))
+        tile.addView(txt, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        if (off) tile.alpha = 0.6f
+        val id = r.str("id").orEmpty()
+        tile.isClickable = true
+        tile.setOnClickListener {
+            if (off) a.toast(r.str("sous").orEmpty(), Ui.WARN)
+            else { a.toast(tr("Lecture de « %s »", r.str("nom").orEmpty()), Ui.OK); act(id) }
+        }
+        return tile
     }
 
     private fun round(kind: Icon.Kind, size: Int, bg: Int = 0x14FFFFFF, onClick: () -> Unit): View {
