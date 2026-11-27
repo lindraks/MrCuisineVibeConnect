@@ -391,21 +391,30 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
         }
         thumb.addView(FrameLayout(a).apply {
             background = Ui.round(SPOTIFY, 11f)
-            addView(Icon(a, Icon.Kind.PLAY, Ui.BG), FrameLayout.LayoutParams(Ui.u(10), Ui.u(10), Gravity.CENTER))
+            // En cours : le toucher l'arrête, d'où l'icône pause.
+            addView(Icon(a, if (r.bool("actif") == true) Icon.Kind.PAUSE else Icon.Kind.PLAY, Ui.BG),
+                FrameLayout.LayoutParams(Ui.u(10), Ui.u(10), Gravity.CENTER))
         }, FrameLayout.LayoutParams(Ui.u(22), Ui.u(22), Gravity.BOTTOM or Gravity.END).apply { rightMargin = -Ui.u(4); bottomMargin = -Ui.u(4) })
         thumb.clipChildren = false
         tile.clipChildren = false
         tile.addView(thumb, LinearLayout.LayoutParams(Ui.u(52), Ui.u(52)).apply { rightMargin = Ui.u(12) })
         val txt = Ui.vertical(a)
         txt.addView(Ui.ellipsize(Ui.text(a, r.str("nom").orEmpty(), 16f, Ui.TEXT, Ui.MEDIUM)))
-        txt.addView(Ui.ellipsize(Ui.text(a, r.str("sous").orEmpty(), 13f, if (off) Ui.WARN else Ui.TEXT2)), Ui.lp(t = 2))
+        txt.addView(Ui.ellipsize(Ui.text(a, r.str("sous").orEmpty(), 13f, when {
+            off -> Ui.WARN
+            r.bool("actif") == true -> SPOTIFY
+            else -> Ui.TEXT2
+        })), Ui.lp(t = 2))
         tile.addView(txt, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
         if (off) tile.alpha = 0.6f
         val id = r.str("id").orEmpty()
         tile.isClickable = true
         tile.setOnClickListener {
             if (off) a.toast(r.str("sous").orEmpty(), Ui.WARN)
-            else { a.toast(tr("Lecture de « %s »", r.str("nom").orEmpty()), Ui.OK); act(id) }
+            else {
+                if (r.bool("actif") != true) a.toast(tr("Lecture de « %s »", r.str("nom").orEmpty()), Ui.OK)
+                act(id)
+            }
         }
         return tile
     }
