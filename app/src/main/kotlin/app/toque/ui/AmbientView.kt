@@ -33,6 +33,8 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
     private val main = Handler(Looper.getMainLooper())
     private val clock = Ui.text(a, "", 56f, Ui.TEXT, Ui.THIN)
     private val date = Ui.text(a, "", 20f, Ui.TEXT2, Ui.LIGHT)
+    /** Pastille à côté de l'heure (couleur, titre court, valeur), par ex. un tarif d'électricité. */
+    private val badge = Ui.horizontal(a, Gravity.CENTER)
     private val weather = Ui.vertical(a)
     private val gauges = Ui.horizontal(a, Gravity.TOP)
     private val right = Ui.vertical(a)
@@ -63,6 +65,8 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
         val top = Ui.horizontal(a, Gravity.BOTTOM)
         top.setPadding(Ui.u(6), 0, Ui.u(6), 0)
         top.addView(clock)
+        badge.visibility = View.GONE
+        top.addView(badge, LinearLayout.LayoutParams(Ui.WRAP, Ui.u(36)).apply { leftMargin = Ui.u(16); bottomMargin = Ui.u(12) })
         top.addView(View(a), LinearLayout.LayoutParams(0, 1, 1f))
         top.addView(date, Ui.lp(Ui.WRAP, Ui.WRAP, b = 8))
         left.addView(top)
@@ -114,6 +118,7 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
     }
 
     private fun show(d: Map<String, Any?>) {
+        showBadge(d["pastille"].obj())
         showWeather(d["meteo"].obj())
         showGauges(d["jauges"].list().map { it.obj() })
         right.removeAllViews()
@@ -122,6 +127,30 @@ class AmbientView(private val a: MainActivity) : FrameLayout(a) {
         if (music.isNotEmpty()) right.addView(musicCard(music, if (right.childCount == 0) 2 else 1), LinearLayout.LayoutParams(Ui.MATCH, 0, 1f).apply { bottomMargin = Ui.u(14) })
         else right.addView(View(a), LinearLayout.LayoutParams(Ui.MATCH, 0, 1f))
         right.addView(bottomBar(d["alertes"].list().mapNotNull { it as? String }, d["actions"].list().map { it.obj() }))
+    }
+
+    // ------------------------------------------------------------------ pastille
+    private fun showBadge(b: Map<String, Any?>) {
+        badge.removeAllViews()
+        val title = b.str("title").orEmpty()
+        val value = b.str("value").orEmpty()
+        if (title.isEmpty() && value.isEmpty()) {
+            badge.visibility = View.GONE
+            return
+        }
+        fun color(k: String, def: Int) = try { android.graphics.Color.parseColor(b.str(k)) } catch (_: Exception) { def }
+        val bg = color("bg", Ui.SURFACE2)
+        val fg = color("fg", Ui.TEXT)
+        badge.background = Ui.round(bg, 18f)
+        badge.setPadding(Ui.u(14), 0, Ui.u(16), 0)
+        if (title.isNotEmpty()) badge.addView(Ui.text(a, title, 16f, fg, Ui.BOLD).apply { letterSpacing = 0.06f })
+        if (title.isNotEmpty() && value.isNotEmpty()) {
+            badge.addView(View(a).apply { setBackgroundColor((fg and 0x00FFFFFF) or 0x55000000) },
+                LinearLayout.LayoutParams(Ui.u(1.5f), Ui.u(16)).apply { leftMargin = Ui.u(10); rightMargin = Ui.u(10) })
+        }
+        if (value.isNotEmpty()) badge.addView(Ui.text(a, value, 16f, fg, Ui.MEDIUM))
+        badge.contentDescription = b.str("label")
+        badge.visibility = View.VISIBLE
     }
 
     // ------------------------------------------------------------------ météo
